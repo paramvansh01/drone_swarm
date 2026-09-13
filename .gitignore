@@ -45,3 +45,11 @@ yarn-error.log*
 
 # Local logs
 *.log
+
+# High-resolution Esri imagery: local cache only, not redistributable
+terrain_packs/*/*_hr.jpg
+
+# Satellite tile cache for the globe (fetched on demand / pre-fetched)
+terrain_packs/_tiles/
+data/weather/
+!data/weather/fitted_model.json

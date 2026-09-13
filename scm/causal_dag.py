@@ -57,6 +57,7 @@ class CausalDAG:
         # Causal variables
         self.variables = {
             "T": CausalVariable("terrain_occlusion", "T", "RF attenuation from terrain", "dB_norm"),
+            "W": CausalVariable("weather", "W", "Rainfall and turbulence severity", "index"),
             "D": CausalVariable("distance", "D", "Normalized inter-drone distance", "m_norm"),
             "J": CausalVariable("jamming_noise", "J", "Noise floor elevation", "dB_norm"),
             "θ": CausalVariable("antenna_pose", "θ", "Antenna alignment factor", ""),
@@ -66,6 +67,7 @@ class CausalDAG:
         # Structural equation coefficients (physics-informed priors)
         self.beta = {
             "β₀": -2.0,   # intercept (bias toward low loss in nominal conditions)
+            "β_W": 1.6,    # weather: wet antennas and attitude under gust loading
             "β_T": 3.0,    # terrain occlusion has strong effect
             "β_D": 2.5,    # distance has moderate-strong effect
             "β_J": 4.0,    # jamming has the strongest direct effect
@@ -75,6 +77,7 @@ class CausalDAG:
         # DAG edges (parent → child)
         self.edges = [
             ("T", "L"),
+            ("W", "L"),
             ("D", "L"),
             ("J", "L"),
             ("θ", "L"),
@@ -92,7 +95,8 @@ class CausalDAG:
             ex = np.exp(x)
             return ex / (1.0 + ex)
 
-    def predict_loss(self, T: float, D: float, J: float, theta: float) -> float:
+    def predict_loss(self, T: float, D: float, J: float, theta: float,
+                     W: float = 0.0) -> float:
         """
         Predict packet loss using the structural equation.
 
@@ -104,11 +108,12 @@ class CausalDAG:
             + self.beta["β_D"] * D
             + self.beta["β_J"] * J
             + self.beta["β_θ"] * theta
+            + self.beta["β_W"] * W
         )
         return self.sigmoid(linear)
 
     def compute_causal_contributions(
-        self, T: float, D: float, J: float, theta: float
+        self, T: float, D: float, J: float, theta: float, W: float = 0.0
     ) -> Dict[str, float]:
         """
         Compute the causal contribution of each variable to packet loss.
@@ -121,19 +126,20 @@ class CausalDAG:
             "distance": self.beta["β_D"] * D,
             "jamming": self.beta["β_J"] * J,
             "antenna": self.beta["β_θ"] * theta,
+            "weather": self.beta["β_W"] * W,
             "bias": self.beta["β₀"],
         }
         return contributions
 
     def identify_root_cause(
-        self, T: float, D: float, J: float, theta: float
+        self, T: float, D: float, J: float, theta: float, W: float = 0.0
     ) -> Tuple[str, float]:
         """
         Identify the dominant root cause of packet loss.
 
         Returns the variable with the largest |β_i * X_i| contribution.
         """
-        contributions = self.compute_causal_contributions(T, D, J, theta)
+        contributions = self.compute_causal_contributions(T, D, J, theta, W)
         # Exclude bias
         variable_contributions = {
             k: abs(v) for k, v in contributions.items() if k != "bias"
@@ -165,18 +171,19 @@ class CausalDAG:
         return T, D, J, theta
 
     def get_beta_vector(self) -> np.ndarray:
-        """Get coefficient vector [β₀, β_T, β_D, β_J, β_θ]."""
+        """Get coefficient vector [β₀, β_T, β_D, β_J, β_θ, β_W]."""
         return np.array([
             self.beta["β₀"],
             self.beta["β_T"],
             self.beta["β_D"],
             self.beta["β_J"],
             self.beta["β_θ"],
+            self.beta["β_W"],
         ])
 
     def set_beta_vector(self, beta: np.ndarray):
         """Set coefficient vector."""
-        keys = ["β₀", "β_T", "β_D", "β_J", "β_θ"]
+        keys = ["β₀", "β_T", "β_D", "β_J", "β_θ", "β_W"]
         for i, key in enumerate(keys):
             self.beta[key] = float(beta[i])
 

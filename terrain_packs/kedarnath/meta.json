@@ -1,0 +1,42 @@
+{
+  "id": "kedarnath",
+  "name": "Kedarnath",
+  "region": "Rudraprayag, Uttarakhand",
+  "lat": 30.72,
+  "lon": 79.068,
+  "size_m": 5120.0,
+  "snow_line_m": 4400.0,
+  "description": "Mandakini valley below Kedarnath \u2014 site of the 2013 flash flood and debris flow. Narrow gorge, no ground access after the road washes out.",
+  "use_case": "Flood / landslide disaster response, survivor search",
+  "resolution": 1025,
+  "context_size_m": 35840.0,
+  "context_resolution": 513,
+  "min_height_m": 2803.01025390625,
+  "max_height_m": 4806.44140625,
+  "rotation_k": 1,
+  "north_bearing_deg": 180.0,
+  "inner_bounds": [
+    30.69700038667596,
+    30.74299412842638,
+    79.04124931181934,
+    79.09475068818057
+  ],
+  "context_bounds": [
+    30.558887658492484,
+    30.880843582327657,
+    78.88074518273555,
+    79.25525481726436
+  ],
+  "sources": {
+    "elevation": "AWS Open Data Terrain Tiles (Terrarium; SRTM/Copernicus-derived)",
+    "imagery": "Sentinel-2 cloudless - https://s2maps.eu by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2016), CC BY 4.0",
+    "imagery_hr": "Esri World Imagery \u2014 Esri, Maxar, Earthstar Geographics, and the GIS User Community (local cache, not redistributed)"
+  },
+  "built": "2026-09-12",
+  "mid_bounds": [
+    29.998681952819325,
+    31.435962027793305,
+    78.23204099435532,
+    79.9039590056446
+  ]
+}

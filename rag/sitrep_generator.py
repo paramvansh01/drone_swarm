@@ -54,6 +54,7 @@ class SitrepGenerator:
         metrics: Dict,
         causal_state: Optional[Dict] = None,
         mission_id: str = "CDAWN-001",
+        ew_state: Optional[Dict] = None,
     ) -> Dict:
         """
         Generate a SITREP.
@@ -67,16 +68,20 @@ class SitrepGenerator:
         Returns:
             SITREP dict with text, evidence citations, and metadata.
         """
-        start = time.time()
+        # perf_counter, not time(): template synthesis completes in tens of
+        # microseconds and time() on some platforms has ~15 ms granularity,
+        # which reported every SITREP as '0 ms'.
+        start = time.perf_counter()
         self._sitrep_counter += 1
         sitrep_id = f"SITREP-{self._sitrep_counter:04d}"
 
         if self.use_template:
-            sitrep = self._template_generate(evidence, metrics, causal_state, mission_id, sitrep_id)
+            sitrep = self._template_generate(evidence, metrics, causal_state, mission_id, sitrep_id,
+                                             ew_state)
         else:
             sitrep = self._slm_generate(evidence, metrics, causal_state, mission_id, sitrep_id)
 
-        sitrep["generation_time_ms"] = (time.time() - start) * 1000
+        sitrep["generation_time_ms"] = (time.perf_counter() - start) * 1000
         self._sitrep_log.append(sitrep)
         if len(self._sitrep_log) > 50:
             self._sitrep_log = self._sitrep_log[-30:]
@@ -90,6 +95,7 @@ class SitrepGenerator:
         causal_state: Optional[Dict],
         mission_id: str,
         sitrep_id: str,
+        ew_state: Optional[Dict] = None,
     ) -> Dict:
         """Generate SITREP using structured template."""
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S UTC")
@@ -119,12 +125,46 @@ class SitrepGenerator:
         if not detections_summary:
             detections_summary = ["  No detections reported."]
 
-        # Metrics
-        pdr = metrics.get("swarm_pdr", 0)
-        battery = metrics.get("avg_battery", 0)
-        pois_surveyed = metrics.get("pois_surveyed", 0)
-        total_pois = metrics.get("total_pois", 0)
-        phase = metrics.get("current_phase", 0)
+        # Metrics.
+        #
+        # A missing value is reported as missing, never as zero. Defaulting
+        # absent telemetry to 0 made the report state "PDR 0.0%" and then
+        # issue a degraded-comms ALERT and a low-battery RTH WARNING on the
+        # strength of data it never had — an ungrounded claim of exactly the
+        # kind a situation report must not make.
+        #
+        # Backhaul PDR (can each scout reach the ground station) is preferred
+        # over the all-links mean, which can look healthy while a scout is
+        # cut off.
+        pdr = metrics.get("backhaul_pdr", metrics.get("swarm_pdr"))
+        battery = metrics.get("avg_battery")
+        pois_surveyed = metrics.get("pois_surveyed")
+        total_pois = metrics.get("total_pois")
+        phase = metrics.get("current_phase", "—")
+
+        pdr_line = f"{pdr:.1%}" if pdr is not None else "not reported"
+        battery_line = f"{battery:.1f}%" if battery is not None else "not reported"
+        survey_line = (f"{pois_surveyed}/{total_pois} Points of Interest"
+                       if pois_surveyed is not None and total_pois else "not reported")
+
+        recommendations = []
+        if pdr is None:
+            recommendations.append("Link status unknown — no telemetry in this report window.")
+        elif pdr > 0.9:
+            recommendations.append("Continue survey operations.")
+        else:
+            recommendations.append(
+                f"ALERT: Backhaul delivery at {pdr:.0%}. Consider relay repositioning.")
+        if battery is None:
+            recommendations.append("Battery state unknown — no telemetry in this report window.")
+        elif battery > 30:
+            recommendations.append("Battery levels nominal.")
+        else:
+            recommendations.append(
+                f"WARNING: Mean battery {battery:.0f}%. Initiate RTH protocol.")
+
+        confidence_label = ("HIGH" if pdr is not None and pdr > 0.9 and len(citations) > 2
+                            else "MODERATE" if citations else "LOW")
 
         # Causal diagnosis
         causal_summary = "No anomalies detected."
@@ -139,6 +179,35 @@ class SitrepGenerator:
                     f"Intervention recommended."
                 )
 
+        # Electronic warfare: only what the swarm measured and inferred
+        ew_summary = "No hostile emitters detected."
+        if ew_state and ew_state.get("active"):
+            located = ew_state.get("estimates") or ([ew_state["estimate"]]
+                                                    if ew_state.get("estimate") else [])
+            est = located[0] if located else None
+            if len(located) > 1:
+                ew_summary = (f"{len(located)} HOSTILE EMITTERS geolocated: " + "; ".join(
+                    f"{e.get('id', 'emitter')} at grid ({e['x']:.0f}, {e['y']:.0f}) "
+                    f"± {e['radius_m']:.0f} m, est. {e['power_dbm']:.0f} dBm" for e in located) + ".")
+                recommendations.insert(0, (
+                    f"PRIORITY: Neutralise {len(located)} hostile emitters — "
+                    + "; ".join(f"({e['x']:.0f}, {e['y']:.0f})" for e in located) + "."))
+            elif est:
+                ew_summary = (
+                    f"HOSTILE JAMMER geolocated at grid ({est['x']:.0f}, {est['y']:.0f}) "
+                    f"± {est['radius_m']:.0f} m, est. {est['power_dbm']:.0f} dBm "
+                    f"(fix from {est['sensors']} aircraft noise-floor readings).")
+                recommendations.insert(0, (
+                    f"PRIORITY: Neutralise hostile emitter at grid ({est['x']:.0f}, "
+                    f"{est['y']:.0f}) ± {est['radius_m']:.0f} m."))
+            else:
+                ew_summary = (f"Jamming detected at {len(ew_state.get('jammed_nodes') or [])} "
+                              "aircraft; source not yet located.")
+            if ew_state.get("withdrawn"):
+                ew_summary += f" Withdrawn to regain link: {', '.join(ew_state['withdrawn'])}."
+            if ew_state.get("denied_pois"):
+                ew_summary += f" Targets held: {', '.join(ew_state['denied_pois'])}."
+
         # Build SITREP
         text = f"""
 ═══════════════════════════════════════════════════
@@ -148,9 +217,9 @@ class SitrepGenerator:
 ═══════════════════════════════════════════════════
 
 1. MISSION STATUS
-   Survey Progress: {pois_surveyed}/{total_pois} Points of Interest
-   Swarm PDR: {pdr:.1%}
-   Average Battery: {battery:.1f}%
+   Survey Progress: {survey_line}
+   Backhaul PDR: {pdr_line}
+   Average Battery: {battery_line}
    Current Phase: {phase}
 
 2. OBSERVATIONS
@@ -158,14 +227,14 @@ class SitrepGenerator:
 
 3. COMMUNICATIONS ASSESSMENT
    {causal_summary}
+   EW: {ew_summary}
 
 4. RECOMMENDATIONS
-   {"Continue survey operations." if pdr > 0.9 else "ALERT: Degraded communications. Consider relay repositioning."}
-   {"Battery levels nominal." if battery > 30 else "WARNING: Low battery across swarm. Initiate RTH protocol."}
+   {(chr(10) + "   ").join(recommendations)}
 
 ═══════════════════════════════════════════════════
   Evidence Citations: {len(citations)} sources
-  Confidence: {'HIGH' if pdr > 0.9 and len(citations) > 2 else 'MODERATE'}
+  Confidence: {confidence_label}
 ═══════════════════════════════════════════════════
 """.strip()
 
@@ -178,7 +247,7 @@ class SitrepGenerator:
             "metrics_snapshot": {
                 "pdr": pdr,
                 "battery": battery,
-                "survey_progress": f"{pois_surveyed}/{total_pois}",
+                "survey_progress": survey_line,
             },
             "mode": "template",
         }

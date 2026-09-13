@@ -1,22 +1,28 @@
-# C-DAWN Python requirements
-# Core simulation
+# C-DAWN Python requirements (Python 3.10+)
+
+# Numerics
 numpy>=1.24.0
 scipy>=1.10.0
 
-# Deep learning (LTC + GNN)
+# Deep learning — LTC controller and E(3)-GNN
 torch>=2.0.0
 
-# Web server
+# Ground control server + three-node cluster transport
 fastapi>=0.100.0
 uvicorn[standard]>=0.22.0
-websockets>=11.0
-
-# RAG pipeline (optional — install for full pipeline)
-# chromadb>=0.4.0
-# ultralytics>=8.0.0      # YOLOv11
-# openai-clip              # CLIP ViT-B/32
-# llama-cpp-python>=0.2.0  # Phi-3-Mini quantized
-
-# Utilities
+websockets>=12.0          # sync client used by edge nodes (BRAVO / CHARLIE)
 pydantic>=2.0.0
-python-dotenv>=1.0.0
+
+# Tests
+pytest>=7.0
+
+# Only for (re)building terrain packs — tools/build_terrain_packs.py
+Pillow>=10.0
+certifi
+
+# Optional — full RAG pipeline. The demo runs without these using the
+# deterministic template generator and simulated detections.
+# chromadb>=0.4.0
+# ultralytics>=8.0.0       # YOLOv11-nano
+# open-clip-torch          # CLIP ViT-B/32
+# llama-cpp-python>=0.2.0  # Phi-3-Mini (quantised)

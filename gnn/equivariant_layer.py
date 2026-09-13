@@ -38,6 +38,7 @@ class E3MessagePassingLayer(nn.Module):
         hidden_dim: int = 64,
         output_feat_dim: int = None,
         residual: bool = True,
+        coord_scale: float = 1.0,
     ):
         """
         Args:
@@ -74,8 +75,18 @@ class E3MessagePassingLayer(nn.Module):
             nn.Linear(hidden_dim, self.output_feat_dim),
         )
 
-        # Coordinate update scale
-        self.coord_scale = 0.1  # small updates for stability
+        # Scale applied to the aggregated coordinate update.
+        #
+        # This is the gain of the entire equivariant coordinate pathway, so it
+        # governs how far a node can be moved per layer *in the normalised
+        # frame*. It was previously 0.1, which — combined with the tanh-bounded
+        # coordinate MLP and a 250 m length scale — capped a full forward pass
+        # at a few metres of displacement. At kilometre-scale relay spacing
+        # that is indistinguishable from not moving at all, and no amount of
+        # training could overcome it. The per-step displacement is bounded
+        # properly in TopologyNet.forward instead, which is where a limit
+        # expressed in real metres belongs.
+        self.coord_scale = coord_scale
 
     def forward(
         self,
@@ -121,6 +132,12 @@ class E3MessagePassingLayer(nn.Module):
         # Aggregate messages per node
         msg_agg = torch.zeros(N, messages.shape[-1], device=positions.device)
         msg_agg.scatter_add_(0, src.unsqueeze(-1).expand(-1, messages.shape[-1]), messages)
+
+        # Mean- rather than sum-aggregation of the coordinate update, so the
+        # step size does not grow with the number of neighbours.
+        degree = torch.zeros(N, 1, device=positions.device)
+        degree.scatter_add_(0, src.unsqueeze(-1), torch.ones_like(dist))
+        coord_agg = coord_agg / degree.clamp(min=1.0)
 
         # Update positions (equivariant)
         new_positions = positions + self.coord_scale * coord_agg

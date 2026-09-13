@@ -1,0 +1,325 @@
+{
+  "seeds": [
+    4207,
+    5220,
+    6233,
+    7246,
+    8259
+  ],
+  "strategies": {
+    "chain": {
+      "optimizer": {
+        "USE_MULTISTART": false,
+        "USE_HYSTERESIS": false,
+        "ANTICIPATE_S": 0.0
+      },
+      "promote_scouts": false
+    },
+    "chain+promote": {
+      "optimizer": {
+        "USE_MULTISTART": false,
+        "USE_HYSTERESIS": false,
+        "ANTICIPATE_S": 0.0
+      },
+      "promote_scouts": true
+    },
+    "chain+anticipate+promote": {
+      "optimizer": {
+        "USE_MULTISTART": false,
+        "USE_HYSTERESIS": false,
+        "ANTICIPATE_S": 25.0
+      },
+      "promote_scouts": true
+    },
+    "multistart+promote": {
+      "optimizer": {
+        "USE_MULTISTART": true,
+        "USE_HYSTERESIS": false,
+        "ANTICIPATE_S": 0.0
+      },
+      "promote_scouts": true
+    },
+    "multistart+anticipate+promote": {
+      "optimizer": {
+        "USE_MULTISTART": true,
+        "USE_HYSTERESIS": false,
+        "ANTICIPATE_S": 25.0
+      },
+      "promote_scouts": true
+    },
+    "multistart+hyst+ant+promote": {
+      "optimizer": {
+        "USE_MULTISTART": true,
+        "USE_HYSTERESIS": true,
+        "ANTICIPATE_S": 25.0
+      },
+      "promote_scouts": true
+    }
+  },
+  "results": {
+    "chain": {
+      "outage_s_mean": 6.5760000000000005,
+      "outage_s_std": 6.425591334655513,
+      "mean_backhaul": 0.9639046351710479,
+      "collisions": 0,
+      "pois_mean": 5.0,
+      "per_seed": {
+        "4207": {
+          "outage_s": 17.400000000000002,
+          "mean_backhaul": 0.9063807552891204,
+          "pois": 5,
+          "collisions": 0,
+          "closest_m": 25.085260845157226
+        },
+        "5220": {
+          "outage_s": 7.0,
+          "mean_backhaul": 0.9657478113140092,
+          "pois": 5,
+          "collisions": 0,
+          "closest_m": 25.109043969788246
+        },
+        "6233": {
+          "outage_s": 0.0,
+          "mean_backhaul": 0.9963837976730392,
+          "pois": 5,
+          "collisions": 0,
+          "closest_m": 25.154804232032827
+        },
+        "7246": {
+          "outage_s": 8.42,
+          "mean_backhaul": 0.9590299354897828,
+          "pois": 5,
+          "collisions": 0,
+          "closest_m": 25.16912601918144
+        },
+        "8259": {
+          "outage_s": 0.06,
+          "mean_backhaul": 0.9919808760892873,
+          "pois": 5,
+          "collisions": 0,
+          "closest_m": 25.109409810562138
+        }
+      }
+    },
+    "chain+promote": {
+      "outage_s_mean": 0.0,
+      "outage_s_std": 0.0,
+      "mean_backhaul": 0.9999107298462133,
+      "collisions": 0,
+      "pois_mean": 4.4,
+      "per_seed": {
+        "4207": {
+          "outage_s": 0.0,
+          "mean_backhaul": 0.9999113802285111,
+          "pois": 4,
+          "collisions": 0,
+          "closest_m": 25.085260845157226
+        },
+        "5220": {
+          "outage_s": 0.0,
+          "mean_backhaul": 0.9999091837832981,
+          "pois": 5,
+          "collisions": 0,
+          "closest_m": 25.109043969788246
+        },
+        "6233": {
+          "outage_s": 0.0,
+          "mean_backhaul": 0.9999120070484768,
+          "pois": 5,
+          "collisions": 0,
+          "closest_m": 25.154804232032827
+        },
+        "7246": {
+          "outage_s": 0.0,
+          "mean_backhaul": 0.9999120098255708,
+          "pois": 3,
+          "collisions": 0,
+          "closest_m": 25.16912601918144
+        },
+        "8259": {
+          "outage_s": 0.0,
+          "mean_backhaul": 0.9999090683452103,
+          "pois": 5,
+          "collisions": 0,
+          "closest_m": 25.109409810562138
+        }
+      }
+    },
+    "chain+anticipate+promote": {
+      "outage_s_mean": 0.0,
+      "outage_s_std": 0.0,
+      "mean_backhaul": 0.9997646678359627,
+      "collisions": 0,
+      "pois_mean": 4.4,
+      "per_seed": {
+        "4207": {
+          "outage_s": 0.0,
+          "mean_backhaul": 0.9997581627660947,
+          "pois": 4,
+          "collisions": 0,
+          "closest_m": 28.89530606677176
+        },
+        "5220": {
+          "outage_s": 0.0,
+          "mean_backhaul": 0.9997726104609491,
+          "pois": 5,
+          "collisions": 0,
+          "closest_m": 25.66407164978008
+        },
+        "6233": {
+          "outage_s": 0.0,
+          "mean_backhaul": 0.9997625681650522,
+          "pois": 5,
+          "collisions": 0,
+          "closest_m": 19.430920520822646
+        },
+        "7246": {
+          "outage_s": 0.0,
+          "mean_backhaul": 0.9997691546782355,
+          "pois": 3,
+          "collisions": 0,
+          "closest_m": 18.831965849181582
+        },
+        "8259": {
+          "outage_s": 0.0,
+          "mean_backhaul": 0.9997608431094828,
+          "pois": 5,
+          "collisions": 0,
+          "closest_m": 25.54382459463522
+        }
+      }
+    },
+    "multistart+promote": {
+      "outage_s_mean": 0.0,
+      "outage_s_std": 0.0,
+      "mean_backhaul": 0.9997703767629857,
+      "collisions": 0,
+      "pois_mean": 4.4,
+      "per_seed": {
+        "4207": {
+          "outage_s": 0.0,
+          "mean_backhaul": 0.9998070535411543,
+          "pois": 4,
+          "collisions": 0,
+          "closest_m": 22.65146558848524
+        },
+        "5220": {
+          "outage_s": 0.0,
+          "mean_backhaul": 0.9997775279865083,
+          "pois": 5,
+          "collisions": 0,
+          "closest_m": 20.141960379220304
+        },
+        "6233": {
+          "outage_s": 0.0,
+          "mean_backhaul": 0.9997425632708961,
+          "pois": 5,
+          "collisions": 0,
+          "closest_m": 20.328479501378542
+        },
+        "7246": {
+          "outage_s": 0.0,
+          "mean_backhaul": 0.9997702482277129,
+          "pois": 3,
+          "collisions": 0,
+          "closest_m": 22.979564685666727
+        },
+        "8259": {
+          "outage_s": 0.0,
+          "mean_backhaul": 0.9997544907886577,
+          "pois": 5,
+          "collisions": 0,
+          "closest_m": 18.526305718946336
+        }
+      }
+    },
+    "multistart+anticipate+promote": {
+      "outage_s_mean": 0.0,
+      "outage_s_std": 0.0,
+      "mean_backhaul": 0.9997543134110453,
+      "collisions": 22,
+      "pois_mean": 4.4,
+      "per_seed": {
+        "4207": {
+          "outage_s": 0.0,
+          "mean_backhaul": 0.9997643818210898,
+          "pois": 4,
+          "collisions": 0,
+          "closest_m": 15.810043994766112
+        },
+        "5220": {
+          "outage_s": 0.0,
+          "mean_backhaul": 0.9997407058903919,
+          "pois": 5,
+          "collisions": 0,
+          "closest_m": 10.566582312056156
+        },
+        "6233": {
+          "outage_s": 0.0,
+          "mean_backhaul": 0.999719442532511,
+          "pois": 5,
+          "collisions": 0,
+          "closest_m": 10.900376984925028
+        },
+        "7246": {
+          "outage_s": 0.0,
+          "mean_backhaul": 0.999788161963249,
+          "pois": 3,
+          "collisions": 22,
+          "closest_m": 3.05964872240597
+        },
+        "8259": {
+          "outage_s": 0.0,
+          "mean_backhaul": 0.9997588748479843,
+          "pois": 5,
+          "collisions": 0,
+          "closest_m": 10.842125159151692
+        }
+      }
+    },
+    "multistart+hyst+ant+promote": {
+      "outage_s_mean": 0.0,
+      "outage_s_std": 0.0,
+      "mean_backhaul": 0.9993712079334773,
+      "collisions": 0,
+      "pois_mean": 4.4,
+      "per_seed": {
+        "4207": {
+          "outage_s": 0.0,
+          "mean_backhaul": 0.998206235686302,
+          "pois": 4,
+          "collisions": 0,
+          "closest_m": 8.617063762709854
+        },
+        "5220": {
+          "outage_s": 0.0,
+          "mean_backhaul": 0.9990719475087596,
+          "pois": 5,
+          "collisions": 0,
+          "closest_m": 9.299378045602214
+        },
+        "6233": {
+          "outage_s": 0.0,
+          "mean_backhaul": 0.9998218215578957,
+          "pois": 5,
+          "collisions": 0,
+          "closest_m": 14.010953566813003
+        },
+        "7246": {
+          "outage_s": 0.0,
+          "mean_backhaul": 0.9999386975113977,
+          "pois": 3,
+          "collisions": 0,
+          "closest_m": 13.116704872193026
+        },
+        "8259": {
+          "outage_s": 0.0,
+          "mean_backhaul": 0.9998173374030315,
+          "pois": 5,
+          "collisions": 0,
+          "closest_m": 19.62780006722076
+        }
+      }
+    }
+  }
+}

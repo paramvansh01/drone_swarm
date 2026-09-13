@@ -1,230 +1,534 @@
 """
-Training loop for LTC flight controller.
+Training pipeline for the LTC flight controller.
 
-Trains the LTC controller on expert PID trajectories + wind gust
-rejection. Generates comparison plots: LTC vs PID tracking error.
+Method: DAgger (Ross et al., 2011) against the privileged expert.
+
+Naive behavioural cloning on expert trajectories fails here for the usual
+reason — the student only ever sees states the *expert* visits, so the first
+time its own small error takes it somewhere unfamiliar the error compounds.
+DAgger fixes this by rolling out the student and labelling the states it
+actually reaches with what the expert would have done there.
+
+Critically, rollouts run in the **real** `sim.physics.FlightDynamics`, with
+the same attitude lag, drag model and lagged/noisy wind estimator used at
+deployment. Training on a simplified surrogate and deploying on the real
+plant is the classic way to get a controller that benchmarks well and flies
+badly.
+
+Usage:
+    python -m ltc.train --iterations 6 --episodes 60 --epochs 12
 """
 
+from __future__ import annotations
+
+import argparse
+import json
+import logging
+import time
+from dataclasses import dataclass
+from pathlib import Path
+from typing import List, Tuple
+
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import numpy as np
-import json
-import logging
-from typing import List, Dict, Tuple
-from pathlib import Path
 
-from .ltc_controller import LTCFlightController
-from .pid_baseline import CascadedPIDFlightController
+from sim.physics import FlightDynamics
+from .expert import PrivilegedExpert
+from .ltc_controller import LTCFlightController, build_observation
 
 logger = logging.getLogger("cdawn.ltc.train")
 
+# Weight on the action-rate penalty (see train_epoch). Tuned so the penalty
+# is a correction to the imitation objective rather than a competitor to it.
+SMOOTHNESS_WEIGHT = 2.5
 
-def generate_training_data(
-    num_episodes: int = 100,
-    episode_length: int = 200,
-    dt: float = 0.02,
-    seed: int = 42,
-) -> Tuple[np.ndarray, np.ndarray]:
+
+# --------------------------------------------------------------------------
+# Episode environment
+# --------------------------------------------------------------------------
+
+@dataclass
+class EpisodeConfig:
+    """Domain randomisation ranges for a single training episode."""
+    length: int = 300               # ticks (300 * 0.02s = 6s)
+    dt: float = 0.02
+    base_wind_max: float = 9.0      # m/s
+    gust_magnitude_max: float = 14.0
+    gust_probability: float = 0.55
+    setpoint_speed_max: float = 16.0
+
+
+class TrainingEpisode:
     """
-    Generate training data from expert PID controller.
+    A single randomised tracking task with wind.
 
-    Runs the PID controller on random waypoint tasks with wind gusts,
-    recording (state_error, control_output) pairs.
-
-    Returns:
-        (inputs, targets): arrays of shape [num_samples, seq_len, dim]
+    The reference is a smoothly moving setpoint (not a step), because that is
+    what the guidance layer actually feeds the controller in flight — a
+    carrot point travelling along a route.
     """
-    rng = np.random.RandomState(seed)
-    pid = CascadedPIDFlightController()
 
-    all_inputs = []
-    all_targets = []
+    def __init__(self, rng: np.random.RandomState, config: EpisodeConfig):
+        self.rng = rng
+        self.cfg = config
+        self.physics = FlightDynamics()
 
-    for ep in range(num_episodes):
-        pid.reset()
+        # Randomised initial state
+        self.position = np.array([0.0, 0.0, 120.0]) + rng.uniform(-8, 8, 3)
+        self.velocity = rng.uniform(-3, 3, 3)
+        self.orientation = np.array([1.0, 0.0, 0.0, 0.0])
+        self.angular_velocity = np.zeros(3)
 
-        # Random initial state
-        pos = rng.uniform(-5, 5, 3).astype(np.float64)
-        pos[2] = rng.uniform(10, 30)
-        vel = rng.uniform(-2, 2, 3).astype(np.float64)
-        target = rng.uniform(-10, 10, 3).astype(np.float64)
-        target[2] = rng.uniform(10, 40)
+        # Reference: a path point travelling at constant velocity, from which
+        # a *carrot* setpoint is derived exactly as `sim.guidance` does — the
+        # carrot is clamped to a bounded lookahead distance ahead of the
+        # aircraft. Without that clamp the reference simply outruns the
+        # airframe and the tracking error grows without bound, which is not a
+        # regime the deployed controller ever encounters.
+        self.path_point = self.position + rng.uniform(-20, 20, 3)
+        sp_dir = rng.normal(0, 1, 3)
+        sp_dir /= np.linalg.norm(sp_dir) + 1e-9
+        self.path_speed = rng.uniform(0.0, config.setpoint_speed_max)
+        self.path_vel = sp_dir * self.path_speed
+        self.lookahead = rng.uniform(25.0, 60.0)
 
-        inputs_ep = []
-        targets_ep = []
+        self.setpoint = self.path_point.copy()
+        self.setpoint_vel = self.path_vel.copy()
 
-        for step in range(episode_length):
-            # Wind with gusts
-            base_wind = np.array([2.0, 0.5, 0.0])
-            gust = np.zeros(3)
-            if step % 50 < 15:  # periodic gust
-                gust_mag = rng.uniform(3.0, 10.0)
-                gust_dir = rng.normal(0, 1, 3)
-                gust_dir /= np.linalg.norm(gust_dir) + 1e-8
-                phase = (step % 50) / 15.0
-                gust = gust_dir * gust_mag * 0.5 * (1 - np.cos(2 * np.pi * phase))
-            wind = base_wind + gust + rng.normal(0, 0.5, 3)
+        # Wind: steady component + optional gust train
+        self.base_wind = rng.uniform(-1, 1, 3) * config.base_wind_max
+        self.base_wind[2] *= 0.35
+        self.gusts = self._make_gusts()
 
-            # State error
-            pos_error = target - pos
-            orient_error = np.zeros(3)
+        # Onboard wind estimator state (mirrors sim.drone.Drone exactly)
+        self.wind_estimate = self.base_wind.copy()
+        self.est_tau = 0.65
+        self.est_noise = 1.1
 
-            # Expert PID control
-            thrust, yaw_rate = pid.compute_control(pos_error, vel, wind, 0.0, dt)
+        self.t = 0.0
 
-            # Build input vector (same as LTC controller input)
-            state_error = np.concatenate([
-                pos_error,
-                -vel,  # velocity error (target vel = 0)
-                wind,
-                orient_error,
-            ])
+    def _make_gusts(self) -> List[dict]:
+        gusts = []
+        if self.rng.random() > self.cfg.gust_probability:
+            return gusts
+        n = self.rng.randint(1, 4)
+        for _ in range(n):
+            direction = self.rng.normal(0, 1, 3)
+            direction /= np.linalg.norm(direction) + 1e-9
+            gusts.append({
+                "start": self.rng.uniform(0.5, self.cfg.length * self.cfg.dt - 1.0),
+                "duration": self.rng.uniform(0.8, 3.0),
+                "magnitude": self.rng.uniform(5.0, self.cfg.gust_magnitude_max),
+                "direction": direction,
+            })
+        return gusts
 
-            # Normalize expert output to [-1, 1]
-            thrust_normalized = thrust / pid.max_thrust
-            yaw_normalized = yaw_rate / pid.max_yaw_rate
+    def true_wind(self) -> np.ndarray:
+        """Instantaneous wind vector, including any active gust."""
+        wind = self.base_wind.copy()
+        for g in self.gusts:
+            rel = self.t - g["start"]
+            if 0.0 <= rel <= g["duration"]:
+                # 1-cosine gust profile (the standard discrete gust shape)
+                phase = rel / g["duration"]
+                envelope = 0.5 * (1.0 - np.cos(2.0 * np.pi * phase))
+                wind = wind + g["direction"] * g["magnitude"] * envelope
+        # Continuous low-level turbulence
+        wind = wind + self.rng.normal(0, 0.45, 3)
+        return wind
 
-            target_action = np.concatenate([thrust_normalized, [yaw_normalized]])
+    def update_wind_estimate(self, wind: np.ndarray):
+        alpha = self.cfg.dt / (self.est_tau + self.cfg.dt)
+        noisy = wind + self.rng.normal(0, self.est_noise, 3)
+        self.wind_estimate += alpha * (noisy - self.wind_estimate)
 
-            inputs_ep.append(state_error)
-            targets_ep.append(target_action)
+    def advance_setpoint(self):
+        """Advance the path point, then re-derive the carrot from it."""
+        self.path_point = self.path_point + self.path_vel * self.cfg.dt
 
-            # Simulate (simplified physics for data generation)
-            accel = thrust / pid.mass + np.array([0, 0, -9.81]) - 0.1 * vel + rng.normal(0, 0.1, 3)
-            vel += accel * dt
-            pos += vel * dt
+        # Occasional manoeuvre, so the student sees reference changes
+        if self.rng.random() < 0.004:
+            d = self.rng.normal(0, 1, 3)
+            d /= np.linalg.norm(d) + 1e-9
+            self.path_speed = self.rng.uniform(0.0, self.cfg.setpoint_speed_max)
+            self.path_vel = d * self.path_speed
 
-        all_inputs.append(np.array(inputs_ep, dtype=np.float32))
-        all_targets.append(np.array(targets_ep, dtype=np.float32))
+        # Carrot rule, identical to GuidanceLayer._update_routed
+        to_path = self.path_point - self.position
+        dist = float(np.linalg.norm(to_path))
+        if dist > 1e-6:
+            direction = to_path / dist
+            self.setpoint = self.position + direction * min(self.lookahead, dist)
+            self.setpoint_vel = direction * min(self.path_speed, max(dist * 0.8, 1.0))
+        else:
+            self.setpoint = self.path_point.copy()
+            self.setpoint_vel = np.zeros(3)
 
-    return np.array(all_inputs), np.array(all_targets)
+    def cross_track_error(self) -> float:
+        """
+        Perpendicular distance from the aircraft to the reference path.
+
+        This, not distance-to-carrot, is the meaningful tracking metric: the
+        carrot deliberately sits a lookahead ahead of the aircraft, so
+        distance to it is dominated by that design offset. Cross-track error
+        isolates how far wind has pushed the aircraft *off* its intended
+        track, which is exactly the quantity the LTC-vs-PID claim is about.
+        """
+        offset = self.position - self.path_point
+        speed = float(np.linalg.norm(self.path_vel))
+        if speed < 1e-3:
+            return float(np.linalg.norm(offset))
+        direction = self.path_vel / speed
+        along = float(np.dot(offset, direction))
+        return float(np.linalg.norm(offset - along * direction))
+
+    def body_z(self) -> np.ndarray:
+        return self.physics.quaternion_to_rotation_matrix(self.orientation)[:, 2]
+
+    def observation(self) -> np.ndarray:
+        return build_observation(
+            position_error=self.setpoint - self.position,
+            velocity_error=self.setpoint_vel - self.velocity,
+            velocity=self.velocity,
+            wind_estimate=self.wind_estimate,
+            body_z=self.body_z(),
+        )
+
+    def step(self, force: np.ndarray, yaw_rate: float, wind: np.ndarray):
+        result = self.physics.step(
+            position=self.position,
+            velocity=self.velocity,
+            orientation=self.orientation,
+            angular_velocity=self.angular_velocity,
+            thrust_command=force,
+            yaw_rate_command=yaw_rate,
+            wind_velocity=wind,
+            dt=self.cfg.dt,
+            ground_height=-1e6,      # no ground during controller training
+        )
+        self.position = result["position"]
+        self.velocity = result["velocity"]
+        self.orientation = result["orientation"]
+        self.angular_velocity = result["angular_velocity"]
+        self.t += self.cfg.dt
+
+
+# --------------------------------------------------------------------------
+# Rollout / data collection
+# --------------------------------------------------------------------------
+
+def rollout_episode(
+    student: LTCFlightController | None,
+    beta: float,
+    rng: np.random.RandomState,
+    config: EpisodeConfig,
+) -> Tuple[np.ndarray, np.ndarray, float]:
+    """
+    Run one episode, mixing student and expert actions with probability beta
+    (beta = 1.0 -> pure expert).
+
+    Returns (observations [T, 15], expert_actions [T, 4], rms_error).
+    """
+    env = TrainingEpisode(rng, config)
+    expert = PrivilegedExpert()
+
+    if student is not None:
+        student.reset_hidden(1)
+        hidden = torch.zeros(1, student.hidden_size)
+    else:
+        hidden = None
+
+    observations, actions = [], []
+    sq_errors = []
+
+    use_expert_this_episode = student is None or rng.random() < beta
+
+    for _ in range(config.length):
+        wind = env.true_wind()
+        env.update_wind_estimate(wind)
+
+        obs = env.observation()
+
+        # Expert label at THIS state — the core of DAgger
+        expert_force, expert_yaw = expert.compute_control(
+            position_error=env.setpoint - env.position,
+            velocity=env.velocity,
+            true_wind=wind,
+            yaw_error=0.0,
+            dt=config.dt,
+            velocity_setpoint=env.setpoint_vel,
+        )
+        expert_accel_norm = expert.action_from_force(expert_force)
+        label = np.concatenate([expert_accel_norm,
+                                [expert_yaw / expert.max_yaw_rate]]).astype(np.float32)
+
+        observations.append(obs)
+        actions.append(label)
+
+        # Choose the action that is actually executed
+        if use_expert_this_episode:
+            force, yaw_rate = expert_force, expert_yaw
+        else:
+            with torch.no_grad():
+                obs_t = torch.from_numpy(obs).unsqueeze(0)
+                action, hidden = student(obs_t, hidden, config.dt)
+            a = action.squeeze(0).numpy()
+            accel = a[:3] * student.max_accel
+            yaw_rate = float(a[3]) * student.max_yaw_rate
+            force = student.mass * (accel + np.array([0.0, 0.0, 9.81]))
+            fmag = float(np.linalg.norm(force))
+            if fmag > student.max_thrust:
+                force *= student.max_thrust / fmag
+
+        env.step(force, yaw_rate, wind)
+        env.advance_setpoint()
+
+        sq_errors.append(env.cross_track_error() ** 2)
+
+        # Abort a diverged rollout rather than poisoning the dataset with
+        # thousands of samples from a state no sane controller reaches
+        if np.linalg.norm(env.path_point - env.position) > 400.0:
+            break
+
+    # Score only the steady-state portion. The first part of every episode is
+    # the aircraft capturing a randomly offset setpoint; including it would
+    # let the initial-condition draw dominate the metric and mask the actual
+    # difference in disturbance rejection, which is what we care about.
+    settle = int(len(sq_errors) * 0.4)
+    steady = sq_errors[settle:] or sq_errors
+    rms = float(np.sqrt(np.mean(steady))) if steady else float("inf")
+    return np.array(observations), np.array(actions), rms
+
+
+def collect_dataset(
+    student: LTCFlightController | None,
+    beta: float,
+    episodes: int,
+    rng: np.random.RandomState,
+    config: EpisodeConfig,
+) -> Tuple[np.ndarray, np.ndarray, float]:
+    """Collect a batch of equal-length episodes for BPTT training."""
+    obs_list, act_list, rms_list = [], [], []
+
+    for _ in range(episodes):
+        obs, act, rms = rollout_episode(student, beta, rng, config)
+        if len(obs) < config.length:
+            continue                      # skip truncated/diverged rollouts
+        obs_list.append(obs)
+        act_list.append(act)
+        rms_list.append(rms)
+
+    if not obs_list:
+        raise RuntimeError("All rollouts diverged — cannot build a dataset.")
+
+    return (np.stack(obs_list), np.stack(act_list),
+            float(np.mean(rms_list)))
+
+
+# --------------------------------------------------------------------------
+# Training
+# --------------------------------------------------------------------------
+
+def train_epoch(
+    student: LTCFlightController,
+    obs: torch.Tensor,
+    act: torch.Tensor,
+    optimizer: optim.Optimizer,
+    criterion: nn.Module,
+    batch_size: int,
+    dt: float,
+    grad_clip: float = 1.0,
+) -> float:
+    """One pass of truncated BPTT over the whole episode length."""
+    student.train()
+    n = obs.shape[0]
+    perm = torch.randperm(n)
+    total, batches = 0.0, 0
+
+    for i in range(0, n, batch_size):
+        idx = perm[i:i + batch_size]
+        batch_obs, batch_act = obs[idx], act[idx]
+
+        hidden = None
+        outputs = []
+        for t in range(batch_obs.shape[1]):
+            action, hidden = student(batch_obs[:, t, :], hidden, dt)
+            outputs.append(action)
+
+        pred = torch.stack(outputs, dim=1)
+        imitation = criterion(pred, batch_act)
+
+        # Action-rate penalty.
+        #
+        # Pure imitation leaves residual error that shows up as high-frequency
+        # jitter on the command, and on a real airframe jitter is not free:
+        # the first benchmark of this controller matched the expert's tracking
+        # reasonably but burned 2.7x the control effort of the PID baseline,
+        # which on hardware is wasted battery, hot motors and excited
+        # structural modes. Penalising the step-to-step change in the command
+        # buys smoothness for a small amount of tracking accuracy.
+        action_rate = pred[:, 1:, :] - pred[:, :-1, :]
+        smoothness = (action_rate ** 2).mean()
+
+        loss = imitation + SMOOTHNESS_WEIGHT * smoothness
+
+        optimizer.zero_grad()
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(student.parameters(), grad_clip)
+        optimizer.step()
+
+        total += loss.item()
+        batches += 1
+
+    return total / max(batches, 1)
 
 
 def train_ltc_controller(
-    num_episodes: int = 200,
-    episode_length: int = 200,
-    num_epochs: int = 50,
+    iterations: int = 6,
+    episodes_per_iter: int = 60,
+    epochs_per_iter: int = 12,
     batch_size: int = 16,
-    learning_rate: float = 1e-3,
-    hidden_size: int = 32,
-    save_path: str = "ltc_controller.pt",
+    learning_rate: float = 2e-3,
+    hidden_size: int = 40,
+    episode_length: int = 300,
+    save_path: str = "models/ltc_controller.pt",
+    metrics_path: str = "models/ltc_training_metrics.json",
     seed: int = 42,
-) -> Dict:
-    """
-    Train the LTC controller via behavioral cloning from PID expert.
+) -> dict:
+    """Run the full DAgger training loop and save the best checkpoint."""
+    rng = np.random.RandomState(seed)
+    torch.manual_seed(seed)
 
-    Returns:
-        Training metrics dict.
-    """
-    logger.info("Generating training data from PID expert...")
-    inputs, targets = generate_training_data(num_episodes, episode_length, seed=seed)
+    config = EpisodeConfig(length=episode_length)
+    student = LTCFlightController(hidden_size=hidden_size)
+    param_count = student.count_parameters()
+    logger.info("LTC controller parameters: %d (budget 20,000)", param_count)
+    if param_count > 20_000:
+        logger.warning("Parameter count exceeds the 20k edge budget!")
 
-    # Convert to tensors
-    inputs_t = torch.from_numpy(inputs)
-    targets_t = torch.from_numpy(targets)
+    optimizer = optim.Adam(student.parameters(), lr=learning_rate)
+    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=iterations)
+    criterion = nn.SmoothL1Loss(beta=0.1)
 
-    # Create model
-    controller = LTCFlightController(hidden_size=hidden_size)
-    param_count = controller.count_parameters()
-    logger.info(f"LTC controller parameters: {param_count}")
+    agg_obs: List[np.ndarray] = []
+    agg_act: List[np.ndarray] = []
 
-    # Training setup
-    optimizer = optim.Adam(controller.parameters(), lr=learning_rate)
-    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_epochs)
-    criterion = nn.MSELoss()
+    metrics = {
+        "param_count": param_count,
+        "iterations": [],
+        "config": {
+            "episodes_per_iter": episodes_per_iter,
+            "epochs_per_iter": epochs_per_iter,
+            "episode_length": episode_length,
+            "hidden_size": hidden_size,
+            "learning_rate": learning_rate,
+            "seed": seed,
+        },
+    }
 
-    # Training loop
-    n_train = int(0.85 * len(inputs_t))
-    train_inputs, val_inputs = inputs_t[:n_train], inputs_t[n_train:]
-    train_targets, val_targets = targets_t[:n_train], targets_t[n_train:]
+    best_rms = float("inf")
+    t_start = time.time()
 
-    best_val_loss = float('inf')
-    metrics = {"train_loss": [], "val_loss": [], "param_count": param_count}
+    for it in range(iterations):
+        # beta: 1.0 on the first pass (pure expert), decaying afterwards so
+        # the dataset progressively covers the student's own state
+        # distribution rather than the expert's.
+        beta = 1.0 if it == 0 else max(0.0, 0.5 ** it)
 
-    for epoch in range(num_epochs):
-        controller.train()
-        epoch_loss = 0.0
-        n_batches = 0
+        obs_np, act_np, rollout_rms = collect_dataset(
+            None if it == 0 else student, beta, episodes_per_iter, rng, config
+        )
+        agg_obs.append(obs_np)
+        agg_act.append(act_np)
 
-        # Shuffle
-        perm = torch.randperm(n_train)
-        train_inputs = train_inputs[perm]
-        train_targets = train_targets[perm]
+        obs = torch.from_numpy(np.concatenate(agg_obs)).float()
+        act = torch.from_numpy(np.concatenate(agg_act)).float()
 
-        for i in range(0, n_train, batch_size):
-            batch_in = train_inputs[i:i+batch_size]
-            batch_tgt = train_targets[i:i+batch_size]
+        logger.info(
+            "DAgger iter %d/%d | beta=%.2f | rollout RMS=%.3f m | dataset=%d episodes",
+            it + 1, iterations, beta, rollout_rms, obs.shape[0],
+        )
 
-            # Forward pass through sequence
-            batch_size_actual, seq_len, input_dim = batch_in.shape
-            h = None
-            all_outputs = []
+        last_loss = 0.0
+        for epoch in range(epochs_per_iter):
+            last_loss = train_epoch(student, obs, act, optimizer,
+                                    criterion, batch_size, config.dt)
+            if (epoch + 1) % 4 == 0:
+                logger.info("    epoch %2d/%d  loss=%.6f",
+                            epoch + 1, epochs_per_iter, last_loss)
 
-            for t in range(seq_len):
-                action, h = controller(batch_in[:, t, :], h, dt=0.02)
-                # Normalize action back for loss
-                action_norm = action.clone()
-                action_norm[:, :3] /= controller.max_thrust
-                action_norm[:, 3:] /= controller.max_yaw_rate
-                all_outputs.append(action_norm)
+        # Evaluate the student on its own (beta = 0) to get an honest number
+        eval_rng = np.random.RandomState(seed + 10_000 + it)
+        eval_rms = []
+        for _ in range(12):
+            _, _, rms = rollout_episode(student, 0.0, eval_rng, config)
+            eval_rms.append(rms)
+        mean_eval = float(np.mean(eval_rms))
 
-            outputs = torch.stack(all_outputs, dim=1)
-            loss = criterion(outputs, batch_tgt)
+        metrics["iterations"].append({
+            "iteration": it + 1,
+            "beta": beta,
+            "train_loss": last_loss,
+            "rollout_rms_m": rollout_rms,
+            "student_eval_rms_m": mean_eval,
+            "dataset_episodes": int(obs.shape[0]),
+        })
+        logger.info("    student closed-loop RMS: %.3f m", mean_eval)
 
-            optimizer.zero_grad()
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(controller.parameters(), 1.0)
-            optimizer.step()
-
-            epoch_loss += loss.item()
-            n_batches += 1
-
-        avg_train_loss = epoch_loss / max(n_batches, 1)
-
-        # Validation
-        controller.eval()
-        with torch.no_grad():
-            h = None
-            val_outputs = []
-            for t in range(val_inputs.shape[1]):
-                action, h = controller(val_inputs[:, t, :], h, dt=0.02)
-                action_norm = action.clone()
-                action_norm[:, :3] /= controller.max_thrust
-                action_norm[:, 3:] /= controller.max_yaw_rate
-                val_outputs.append(action_norm)
-            val_out = torch.stack(val_outputs, dim=1)
-            val_loss = criterion(val_out, val_targets).item()
-
-        metrics["train_loss"].append(avg_train_loss)
-        metrics["val_loss"].append(val_loss)
-
-        if val_loss < best_val_loss:
-            best_val_loss = val_loss
-            torch.save(controller.state_dict(), save_path)
+        if mean_eval < best_rms:
+            best_rms = mean_eval
+            student.save(save_path)
+            logger.info("    -> new best, saved to %s", save_path)
 
         scheduler.step()
 
-        if (epoch + 1) % 10 == 0:
-            logger.info(
-                f"Epoch {epoch+1}/{num_epochs} | "
-                f"Train: {avg_train_loss:.6f} | Val: {val_loss:.6f} | "
-                f"Best: {best_val_loss:.6f}"
-            )
+    metrics["best_student_rms_m"] = best_rms
+    metrics["train_time_s"] = time.time() - t_start
 
-    logger.info(f"Training complete. Best val loss: {best_val_loss:.6f}")
-    logger.info(f"Model saved to {save_path}")
+    Path(metrics_path).parent.mkdir(parents=True, exist_ok=True)
+    with open(metrics_path, "w") as f:
+        json.dump(metrics, f, indent=2)
 
+    logger.info("Training complete in %.1fs | best closed-loop RMS %.3f m",
+                metrics["train_time_s"], best_rms)
     return metrics
 
 
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
-    metrics = train_ltc_controller(
-        num_episodes=100,
-        num_epochs=30,
-        save_path="models/ltc_controller.pt",
+def main():
+    parser = argparse.ArgumentParser(description="Train the C-DAWN LTC flight controller")
+    parser.add_argument("--iterations", type=int, default=6)
+    parser.add_argument("--episodes", type=int, default=60)
+    parser.add_argument("--epochs", type=int, default=12)
+    parser.add_argument("--hidden", type=int, default=40)
+    parser.add_argument("--batch-size", type=int, default=16)
+    parser.add_argument("--lr", type=float, default=2e-3)
+    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--out", type=str, default="models/ltc_controller.pt")
+    args = parser.parse_args()
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(name)s] %(levelname)s %(message)s",
+        datefmt="%H:%M:%S",
     )
-    print(f"Final train loss: {metrics['train_loss'][-1]:.6f}")
-    print(f"Final val loss: {metrics['val_loss'][-1]:.6f}")
-    print(f"Parameter count: {metrics['param_count']}")
+
+    metrics = train_ltc_controller(
+        iterations=args.iterations,
+        episodes_per_iter=args.episodes,
+        epochs_per_iter=args.epochs,
+        batch_size=args.batch_size,
+        learning_rate=args.lr,
+        hidden_size=args.hidden,
+        save_path=args.out,
+        seed=args.seed,
+    )
+    print(json.dumps({
+        "param_count": metrics["param_count"],
+        "best_student_rms_m": metrics["best_student_rms_m"],
+        "train_time_s": round(metrics["train_time_s"], 1),
+    }, indent=2))
+
+
+if __name__ == "__main__":
+    main()

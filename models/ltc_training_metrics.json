@@ -1,0 +1,79 @@
+{
+  "param_count": 12844,
+  "iterations": [
+    {
+      "iteration": 1,
+      "beta": 1.0,
+      "train_loss": 0.1723877489566803,
+      "rollout_rms_m": 6.025577305767155,
+      "student_eval_rms_m": 10.258961881991326,
+      "dataset_episodes": 80
+    },
+    {
+      "iteration": 2,
+      "beta": 0.5,
+      "train_loss": 0.09709408059716225,
+      "rollout_rms_m": 8.347991101414033,
+      "student_eval_rms_m": 9.18370906433754,
+      "dataset_episodes": 160
+    },
+    {
+      "iteration": 3,
+      "beta": 0.25,
+      "train_loss": 0.08094560702641805,
+      "rollout_rms_m": 7.722913920773394,
+      "student_eval_rms_m": 5.068770250506231,
+      "dataset_episodes": 240
+    },
+    {
+      "iteration": 4,
+      "beta": 0.125,
+      "train_loss": 0.07278960011899471,
+      "rollout_rms_m": 6.2069203947408775,
+      "student_eval_rms_m": 8.169201982395755,
+      "dataset_episodes": 320
+    },
+    {
+      "iteration": 5,
+      "beta": 0.0625,
+      "train_loss": 0.06787081271409988,
+      "rollout_rms_m": 7.470442959161446,
+      "student_eval_rms_m": 7.1814707757767,
+      "dataset_episodes": 400
+    },
+    {
+      "iteration": 6,
+      "beta": 0.03125,
+      "train_loss": 0.060064320887128514,
+      "rollout_rms_m": 6.0626482888781545,
+      "student_eval_rms_m": 7.071791541065747,
+      "dataset_episodes": 480
+    },
+    {
+      "iteration": 7,
+      "beta": 0.015625,
+      "train_loss": 0.057507206818887165,
+      "rollout_rms_m": 6.857021674347391,
+      "student_eval_rms_m": 7.9830005962460815,
+      "dataset_episodes": 560
+    },
+    {
+      "iteration": 8,
+      "beta": 0.0078125,
+      "train_loss": 0.056415161583572626,
+      "rollout_rms_m": 6.82706021703563,
+      "student_eval_rms_m": 8.103003211015105,
+      "dataset_episodes": 640
+    }
+  ],
+  "config": {
+    "episodes_per_iter": 80,
+    "epochs_per_iter": 16,
+    "episode_length": 300,
+    "hidden_size": 48,
+    "learning_rate": 0.002,
+    "seed": 42
+  },
+  "best_student_rms_m": 5.068770250506231,
+  "train_time_s": 827.1012830734253
+}

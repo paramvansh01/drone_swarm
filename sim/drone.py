@@ -42,19 +42,29 @@ class SensorReadings:
 
 @dataclass
 class DroneConfig:
-    """Drone hardware configuration."""
-    mass: float = 1.5             # kg
-    max_thrust: float = 30.0      # N (total, ~2g for 1.5kg)
-    max_speed: float = 15.0       # m/s
+    """
+    Drone hardware configuration.
+
+    Modelled on a ~2 kg class fixed-pitch quadrotor with a 900 MHz mesh
+    radio — the airframe you would realistically field for a multi-kilometre
+    mountain BVLOS survey.
+    """
+    mass: float = 1.9             # kg
+    max_thrust: float = 42.0      # N total (~2.25 g thrust-to-weight)
+    max_speed: float = 22.0       # m/s
     max_yaw_rate: float = 2.0     # rad/s
-    battery_capacity: float = 100.0   # percentage (abstract)
-    battery_drain_rate: float = 0.05  # %/s at hover
-    battery_drain_rate_max: float = 0.15  # %/s at max thrust
-    gps_noise_std: float = 0.5    # m
-    baro_noise_std: float = 0.2   # m
-    imu_noise_std: float = 0.01   # m/s^2 and rad/s
-    antenna_gain_dbi: float = 2.0  # dBi
-    tx_power_dbm: float = 20.0    # dBm (100mW)
+
+    battery_capacity: float = 100.0    # state of charge (%)
+    battery_drain_rate: float = 0.115  # %/s at hover  (~14.5 min hover)
+    battery_drain_rate_max: float = 0.30  # %/s at full thrust
+    rth_reserve_pct: float = 22.0      # SoC below which RTH is mandatory
+
+    gps_noise_std: float = 0.6    # m (GNSS in terrain-shadowed valley)
+    baro_noise_std: float = 0.35  # m
+    imu_noise_std: float = 0.02   # m/s^2 and rad/s
+
+    antenna_gain_dbi: float = 3.0   # dBi (dipole)
+    tx_power_dbm: float = 27.0      # dBm (500 mW ISM)
     radio_frequency_mhz: float = 900.0  # MHz
 
 
@@ -88,6 +98,13 @@ class Drone:
 
         # Battery
         self.battery = self.config.battery_capacity
+        # Airframe health in [0, 1]: an equipment fault cuts thrust authority
+        # and doubles the power draw.
+        self.health = 1.0
+        self.power_factor = 1.0
+        # Error between where the aircraft IS and where it believes it is
+        # (GNSS denial / spoofing). Guidance flies on the believed position.
+        self.nav_error = np.zeros(3)
 
         # Home position (for RTH)
         self.home_position = self.position.copy()
@@ -101,7 +118,23 @@ class Drone:
 
         # Waypoint / target
         self.target_position: Optional[np.ndarray] = None
+        self.target_velocity: np.ndarray = np.zeros(3, dtype=np.float64)
         self.assigned_poi: Optional[str] = None
+
+        # Commanded altitude bias applied by the SCM intervention engine.
+        # do(dz) writes here; the guidance layer adds it to every setpoint,
+        # which is what makes the intervention a *real* actuation rather
+        # than a bookkeeping entry.
+        self.altitude_offset_cmd: float = 0.0
+
+        # Which flight controller is flying this airframe ("LTC" or "PID")
+        self.controller_mode: str = "LTC"
+
+        # Rolling tracking error, and what the shadow PID baseline would
+        # have achieved on the identical disturbance this tick.
+        self.tracking_error: float = 0.0
+        self.shadow_tracking_error: float = 0.0
+        self.agl: float = 0.0
 
         # Telemetry log
         self._telemetry_buffer: List[Dict[str, Any]] = []
@@ -109,6 +142,7 @@ class Drone:
 
         # Mesh network state
         self.neighbors: Dict[str, float] = {}  # drone_id -> link quality [0,1]
+        self.killed_at: Optional[float] = None
         self.packets_sent = 0
         self.packets_received = 0
         self.packets_dropped = 0
@@ -135,7 +169,16 @@ class Drone:
         w, x, y, z = self.orientation
         return float(np.arctan2(2 * (w * z + x * y), 1 - 2 * (y**2 + z**2)))
 
-    def update_sensors(self, wind_velocity: np.ndarray, rng: np.random.RandomState):
+    # Onboard wind estimation is not instantaneous: a real airframe infers
+    # wind from the mismatch between commanded and achieved acceleration,
+    # which is a lagged and noisy observer. This lag is what the LTC's liquid
+    # hidden state has to compensate for, so it must be modelled here AND
+    # reproduced identically during training.
+    WIND_ESTIMATOR_TAU = 0.65   # seconds
+    WIND_ESTIMATOR_NOISE = 1.1  # m/s std
+
+    def update_sensors(self, wind_velocity: np.ndarray, rng: np.random.RandomState,
+                       dt: float = 0.02):
         """Update simulated sensor readings with noise."""
         if not self.is_alive:
             return
@@ -150,8 +193,12 @@ class Drone:
         self.sensors.imu_accel = self.acceleration + rng.normal(0, self.config.imu_noise_std, 3)
         self.sensors.imu_gyro = self.angular_velocity + rng.normal(0, self.config.imu_noise_std, 3)
 
-        # Wind estimate (delayed / noisy version of actual wind)
-        self.sensors.wind_estimate = wind_velocity + rng.normal(0, 0.5, 3)
+        # Wind estimate: first-order lag toward the true wind, plus noise
+        alpha = dt / (self.WIND_ESTIMATOR_TAU + dt)
+        noisy = wind_velocity + rng.normal(0, self.WIND_ESTIMATOR_NOISE, 3)
+        self.sensors.wind_estimate = (
+            self.sensors.wind_estimate + alpha * (noisy - self.sensors.wind_estimate)
+        )
 
     def update_battery(self, dt: float):
         """Drain battery based on thrust output."""
@@ -159,7 +206,9 @@ class Drone:
             return
 
         thrust_fraction = np.linalg.norm(self.thrust_command) / self.config.max_thrust
-        drain = (
+        # A damaged airframe and a wet one both cost power
+        penalty = self.power_factor * (2.0 - self.health)
+        drain = penalty * (
             self.config.battery_drain_rate
             + (self.config.battery_drain_rate_max - self.config.battery_drain_rate) * thrust_fraction
         )
@@ -171,16 +220,26 @@ class Drone:
         elif self.battery < 15.0 and self.status == DroneStatus.ACTIVE:
             self.status = DroneStatus.LOW_BATTERY
 
-    def kill(self):
+    def kill(self, sim_time: Optional[float] = None):
         """Simulate node failure (KILL NODE event)."""
         self.status = DroneStatus.KILLED
-        self.velocity = np.zeros(3)
+        # When the failure happened, so self-healing can be timed from the
+        # failure itself rather than from whenever it was noticed.
+        self.killed_at = sim_time
+        # Keep horizontal momentum so the aircraft tumbles out of the sky
+        # rather than stopping dead in mid-air.
+        self.velocity = np.array([self.velocity[0], self.velocity[1], 0.0])
         self.thrust_command = np.zeros(3)
+        # A downed node carries no traffic; leaving its last link qualities in
+        # place would misreport the mesh as still reaching through it.
+        self.neighbors.clear()
+        self.sensors.rssi.clear()
 
     def revive(self):
         """Revive a killed drone (for demo reset)."""
         self.status = DroneStatus.ACTIVE
-        self.battery = 80.0
+        self.battery = max(self.battery, 80.0)
+        self.altitude_offset_cmd = 0.0
 
     def set_target(self, position: np.ndarray, poi_id: Optional[str] = None):
         """Set waypoint target."""
@@ -244,6 +303,18 @@ class Drone:
             "assigned_poi": self.assigned_poi,
             "neighbors": dict(self.neighbors),
             "rssi": dict(self.sensors.rssi),
+            "agl": self.agl,
+            "orientation": self.orientation.tolist(),
+            "controller": self.controller_mode,
+            "tracking_error": self.tracking_error,
+            "shadow_tracking_error": self.shadow_tracking_error,
+            "altitude_offset_cmd": self.altitude_offset_cmd,
+            "thrust": float(np.linalg.norm(self.thrust_command)),
+            "health": float(getattr(self, "health", 1.0)),
+            "nav_error_m": float(np.linalg.norm(getattr(self, "nav_error", np.zeros(3)))),
+            "ew_hold": bool(getattr(self, "ew_hold", False)),
+            "manual_target": (self.manual_target.tolist()
+                              if getattr(self, "manual_target", None) is not None else None),
         }
 
     def __repr__(self):

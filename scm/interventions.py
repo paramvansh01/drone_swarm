@@ -1,316 +1,487 @@
 """
 Causal interventions for C-DAWN.
 
-Implements the do(Δz) altitude intervention and causal effect
-estimation from the proposal.
+Implements the do(Delta z) altitude intervention and the causal-effect
+estimate described in Section 2.3 of the proposal.
 
-Intervention procedure:
-1. On L exceeding threshold, execute do(Δz = +15m)
-2. Estimate causal effect via pre/post difference in L
-3. Decision rule: effect > threshold → terrain occlusion; else → handover
+Lifecycle of one intervention
+-----------------------------
+    ARMED       link loss exceeded threshold; start collecting a baseline
+    PRE         averaging L over the pre-window (and watching J)
+    ACTUATING   do(dz) written to the aircraft; waiting for it to climb
+    POST        averaging L at the new altitude
+    COMPLETE    effect estimated, attributed, and either held or reverted
+
+What makes this a real intervention
+-----------------------------------
+`do(dz)` writes to `drone.altitude_offset_cmd`, which the guidance layer adds
+to every setpoint it produces. The aircraft physically climbs; the terrain
+profile under the link genuinely changes; the RF model recomputes diffraction
+loss from the new geometry. Nothing about the effect is simulated separately
+from the flight — if the drone cannot climb, there is no effect to measure.
+
+The honest limitation, implemented rather than just admitted
+------------------------------------------------------------
+A pre/post difference identifies the causal effect of altitude only if the
+other parents of L hold still across the window. In an EW environment the
+jammer is adversarial and J will not oblige. Rather than quietly reporting a
+number that assumes otherwise, this engine *records J and D across the whole
+window* and refuses to make a clean attribution when either moved
+materially: the result is returned with `confounded=True` and a stated
+reason. The proposal says this approximation is disclosed to the jury; here
+it is detected per-intervention and surfaced on the dashboard.
 """
 
-import numpy as np
-import time
+from __future__ import annotations
+
 import logging
-from typing import Dict, List, Optional, Tuple
+import numpy as np
 from dataclasses import dataclass, field
+from typing import Dict, List, Optional
 
 logger = logging.getLogger("cdawn.scm.interventions")
 
 
+# Phases
+ARMED = "armed"
+PRE = "pre_observation"
+ACTUATING = "actuating"
+POST = "post_observation"
+COMPLETE = "complete"
+
+
 @dataclass
 class InterventionRecord:
-    """Record of a causal intervention."""
+    """Record of a single do(Delta z) intervention."""
     intervention_id: str
     drone_id: str
     link_id: str
     start_time: float
+    delta_z: float
     end_time: Optional[float] = None
+    phase: str = ARMED
 
-    # Pre-intervention state
+    # Samples collected across the window
+    pre_loss_samples: List[float] = field(default_factory=list)
+    post_loss_samples: List[float] = field(default_factory=list)
+    j_samples: List[float] = field(default_factory=list)
+    d_samples: List[float] = field(default_factory=list)
+
     pre_altitude: float = 0.0
-    pre_loss: float = 0.0
-    pre_T: float = 0.0
-    pre_D: float = 0.0
-
-    # Post-intervention state
     post_altitude: float = 0.0
+    achieved_dz: float = 0.0
+    rung: int = 0                  # index into the probe ladder
+    cumulative_dz: float = 0.0     # total commanded climb so far
+    phase_deadline: float = 0.0
+
+    pre_loss: float = 0.0
     post_loss: float = 0.0
-    post_T: float = 0.0
-    post_D: float = 0.0
 
-    # Causal effect estimate
-    delta_loss: float = 0.0
-    causal_effect: float = 0.0
-    attribution: str = ""  # "terrain_occlusion", "hardware_distance", "jamming"
+    # Effect estimate
+    causal_effect: float = 0.0          # pre_loss - post_loss (positive = better)
+    effect_t_stat: float = 0.0          # |effect| / pooled standard error
+    effect_std: float = 0.0
+    attribution: str = ""
     confidence: float = 0.0
+    confounded: bool = False
+    confound_reason: str = ""
+    recommendation: str = ""
+    reverted: bool = False
 
-    # Status
-    phase: str = "pending"  # "pending", "pre_observation", "intervening", "post_observation", "complete"
+    def to_dict(self) -> dict:
+        return {
+            "id": self.intervention_id,
+            "drone_id": self.drone_id,
+            "link_id": self.link_id,
+            "phase": self.phase,
+            "delta_z": self.delta_z,
+            "achieved_dz": self.achieved_dz,
+            "pre_loss": self.pre_loss,
+            "post_loss": self.post_loss,
+            "causal_effect": self.causal_effect,
+            "effect_t_stat": self.effect_t_stat,
+            "rung": self.rung + 1,
+            "cumulative_dz": self.cumulative_dz,
+            "attribution": self.attribution,
+            "confidence": self.confidence,
+            "confounded": self.confounded,
+            "confound_reason": self.confound_reason,
+            "recommendation": self.recommendation,
+            "reverted": self.reverted,
+            "start_time": self.start_time,
+            "end_time": self.end_time,
+        }
 
 
 class InterventionEngine:
-    """
-    Executes and evaluates causal interventions.
-
-    When the SCM detects anomalous packet loss, this engine:
-    1. Records pre-intervention baseline over ~1 second
-    2. Executes do(Δz = +15m) — commands the drone to increase altitude
-    3. Records post-intervention metrics over ~1 second
-    4. Estimates the causal effect of altitude change on packet loss
-    5. Attributes root cause and triggers appropriate response
-    """
+    """Runs and evaluates do(Delta z) interventions on degraded links."""
 
     def __init__(
         self,
-        delta_z: float = 15.0,          # meters altitude increase
-        observation_window: float = 2.0,  # seconds for pre/post observation
-        effect_threshold: float = 0.05,   # minimum ΔL to attribute to terrain
-        cooldown: float = 10.0,           # seconds between interventions on same link
-        max_interventions_per_link: int = 5,
+        delta_z: float = 15.0,
+        # Escalating probe ladder.
+        #
+        # The proposal specifies do(dz = +15 m), and +15 m remains the first
+        # rung. But benchmarking showed that at this terrain scale — ridges
+        # 400-700 m above the valley floor — a 15 m climb changes the
+        # diffraction geometry measurably only near grazing incidence. For a
+        # link in deep terrain shadow the measured effect was under 0.02 and
+        # statistically indistinguishable from zero, so the engine correctly
+        # but uselessly concluded "not terrain" for links that were obstructed
+        # by nothing else.
+        #
+        # The ladder keeps the specified first probe and escalates only when
+        # that probe returns no detectable effect, so the cheap test is always
+        # tried first and the expensive climb is spent only where it is needed.
+        probe_ladder: tuple = (15.0, 30.0, 60.0),
+        pre_window: float = 1.2,
+        actuation_window: float = 2.2,
+        post_window: float = 1.2,
+        loss_threshold: float = 0.20,
+        effect_threshold: float = 0.05,
+        cooldown: float = 12.0,
+        max_interventions_per_link: int = 4,
+        # A jammer that shifts the noise floor by more than this across the
+        # window invalidates the "J held constant" assumption.
+        # An effect must be at least this many standard errors before it is
+        # called real rather than fading.
+        min_effect_t: float = 2.0,
+        j_stability_db: float = 2.5,
+        # Likewise for range: the aircraft must not have closed significantly.
+        d_stability_frac: float = 0.08,
+        max_accumulated_offset: float = 90.0,
     ):
         self.delta_z = delta_z
-        self.observation_window = observation_window
+        self.probe_ladder = tuple(probe_ladder) or (delta_z,)
+        self.pre_window = pre_window
+        self.actuation_window = actuation_window
+        self.post_window = post_window
+        self.loss_threshold = loss_threshold
         self.effect_threshold = effect_threshold
+        self.min_effect_t = min_effect_t
         self.cooldown = cooldown
         self.max_interventions_per_link = max_interventions_per_link
+        self.j_stability_db = j_stability_db
+        self.d_stability_frac = d_stability_frac
+        self.max_accumulated_offset = max_accumulated_offset
 
-        # Active interventions
         self._active: Dict[str, InterventionRecord] = {}
         self._completed: List[InterventionRecord] = []
-        self._link_cooldowns: Dict[str, float] = {}
-        self._intervention_counter = 0
+        self._cooldowns: Dict[str, float] = {}
+        self._counter = 0
+        self.events: List[dict] = []
 
-    def should_intervene(self, link_id: str, loss: float, sim_time: float, threshold: float = 0.15) -> bool:
-        """
-        Check if an intervention should be triggered.
+    # -- triggering --------------------------------------------------------
 
-        Returns True if:
-        1. Loss exceeds threshold
-        2. Link is not in cooldown
-        3. No active intervention on this link
-        4. Haven't exceeded max interventions
-        """
-        if loss < threshold:
+    def should_intervene(self, link_id: str, loss: float, sim_time: float) -> bool:
+        if loss < self.loss_threshold:
             return False
-
         if link_id in self._active:
             return False
-
-        last_intervention = self._link_cooldowns.get(link_id, -float('inf'))
-        if sim_time - last_intervention < self.cooldown:
+        if sim_time - self._cooldowns.get(link_id, -1e9) < self.cooldown:
             return False
-
-        link_count = sum(1 for r in self._completed if r.link_id == link_id)
-        if link_count >= self.max_interventions_per_link:
+        if sum(1 for r in self._completed if r.link_id == link_id) \
+                >= self.max_interventions_per_link:
             return False
-
         return True
 
-    def start_intervention(
-        self,
-        drone_id: str,
-        link_id: str,
-        current_altitude: float,
-        current_loss: float,
-        current_T: float,
-        current_D: float,
-        sim_time: float,
-    ) -> InterventionRecord:
-        """
-        Start a new causal intervention.
-
-        Phase 1: Record pre-intervention baseline.
-        """
-        self._intervention_counter += 1
-        intervention_id = f"INT-{self._intervention_counter:04d}"
-
+    def arm(self, drone_id: str, link_id: str, altitude: float,
+            sim_time: float) -> InterventionRecord:
+        """Begin an intervention by opening the pre-observation window."""
+        self._counter += 1
         record = InterventionRecord(
-            intervention_id=intervention_id,
+            intervention_id=f"INT-{self._counter:04d}",
             drone_id=drone_id,
             link_id=link_id,
             start_time=sim_time,
-            pre_altitude=current_altitude,
-            pre_loss=current_loss,
-            pre_T=current_T,
-            pre_D=current_D,
-            phase="pre_observation",
+            delta_z=self.delta_z,
+            pre_altitude=altitude,
+            phase=PRE,
         )
-
         self._active[link_id] = record
-        logger.info(
-            f"[{intervention_id}] Starting intervention on {link_id} | "
-            f"drone={drone_id} alt={current_altitude:.1f}m loss={current_loss:.3f}"
-        )
 
+        logger.info("[%s] pre-observation on %s (drone %s, alt %.0f m)",
+                    record.intervention_id, link_id, drone_id, altitude)
+        self.events.append({
+            "time": sim_time,
+            "type": "INTERVENTION_ARMED",
+            "id": record.intervention_id,
+            "link": link_id,
+            "message": (f"{record.intervention_id}: link {link_id} degraded — "
+                        f"baselining before do(dz=+{self.delta_z:.0f}m)"),
+        })
         return record
 
-    def execute_intervention(
-        self,
-        link_id: str,
-        drone,
-        sim_time: float,
-    ) -> Optional[Dict]:
+    # -- per-tick driver ---------------------------------------------------
+
+    def update(self, link_id: str, drone, loss: float, noise_dbm: float,
+               distance_m: float, sim_time: float) -> Optional[dict]:
         """
-        Execute the altitude change do(Δz = +15m).
+        Advance the intervention on `link_id` by one tick.
 
-        Called after pre-observation window.
+        Returns a result dict when the intervention completes, else None.
         """
-        if link_id not in self._active:
+        record = self._active.get(link_id)
+        if record is None:
             return None
 
-        record = self._active[link_id]
+        if record.phase_deadline == 0.0:
+            record.phase_deadline = record.start_time + self.pre_window
 
-        if record.phase != "pre_observation":
-            return None
+        # Sample the covariates on every tick, in every phase — we need their
+        # behaviour across the *whole* window to judge confounding.
+        record.j_samples.append(noise_dbm)
+        record.d_samples.append(distance_m)
 
-        # Check if pre-observation window has elapsed
-        if sim_time - record.start_time < self.observation_window / 2:
-            return None
+        if record.phase == PRE:
+            record.pre_loss_samples.append(loss)
+            if sim_time >= record.phase_deadline:
+                self._actuate(record, drone, sim_time)
 
-        # Execute do(Δz = +15m) — set drone target altitude higher
-        current_target = drone.target_position.copy() if drone.target_position is not None else drone.position.copy()
-        current_target[2] += self.delta_z
-        drone.set_target(current_target)
+        elif record.phase == ACTUATING:
+            if sim_time >= record.phase_deadline:
+                record.phase = POST
+                record.phase_deadline = sim_time + self.post_window
 
-        record.phase = "intervening"
-        logger.info(
-            f"[{record.intervention_id}] Executing do(Δz=+{self.delta_z}m) on {drone.id} | "
-            f"new_target_alt={current_target[2]:.1f}m"
-        )
+        elif record.phase == POST:
+            record.post_loss_samples.append(loss)
+            if sim_time >= record.phase_deadline:
+                return self._evaluate(record, drone, sim_time)
 
-        return {"action": "altitude_change", "delta_z": self.delta_z}
+        return None
 
-    def evaluate_intervention(
-        self,
-        link_id: str,
-        current_loss: float,
-        current_altitude: float,
-        current_T: float,
-        current_D: float,
-        sim_time: float,
-    ) -> Optional[Dict]:
-        """
-        Evaluate the causal effect of the intervention.
+    def _actuate(self, record: InterventionRecord, drone, sim_time: float):
+        """Execute do(Delta z) at the current ladder rung."""
+        rung_dz = self.probe_ladder[min(record.rung, len(self.probe_ladder) - 1)]
+        step = rung_dz - record.cumulative_dz     # incremental climb this rung
 
-        Called after post-observation window.
-        """
-        if link_id not in self._active:
-            return None
+        if abs(drone.altitude_offset_cmd) + step > self.max_accumulated_offset:
+            logger.info("[%s] aborted — accumulated altitude offset at limit",
+                        record.intervention_id)
+            record.phase = COMPLETE
+            record.attribution = "aborted_offset_limit"
+            drone.altitude_offset_cmd -= record.cumulative_dz
+            self._retire(record, sim_time)
+            return
 
-        record = self._active[link_id]
+        drone.altitude_offset_cmd += step
+        record.cumulative_dz = rung_dz
+        record.delta_z = rung_dz
+        record.phase = ACTUATING
+        record.phase_deadline = sim_time + self.actuation_window
+        record.post_loss_samples.clear()
 
-        if record.phase != "intervening":
-            return None
+        logger.info("[%s] do(dz=+%.0fm) on %s (rung %d)", record.intervention_id,
+                    rung_dz, drone.id, record.rung + 1)
+        self.events.append({
+            "time": sim_time,
+            "type": "INTERVENTION_EXECUTED",
+            "id": record.intervention_id,
+            "link": record.link_id,
+            "message": (f"{record.intervention_id}: executing do(dz=+{rung_dz:.0f}m) "
+                        f"on {drone.id} — measuring causal effect on packet loss"),
+        })
 
-        # Check if enough time has passed for the drone to reach new altitude
-        if sim_time - record.start_time < self.observation_window:
-            return None
+    def _evaluate(self, record: InterventionRecord, drone,
+                  sim_time: float) -> dict:
+        """Estimate the causal effect, check confounding, decide, and act."""
+        record.pre_loss = float(np.mean(record.pre_loss_samples)) \
+            if record.pre_loss_samples else 0.0
+        record.post_loss = float(np.mean(record.post_loss_samples)) \
+            if record.post_loss_samples else 0.0
 
-        # Record post-intervention state
-        record.post_altitude = current_altitude
-        record.post_loss = current_loss
-        record.post_T = current_T
-        record.post_D = current_D
+        # Is the pre/post difference distinguishable from measurement noise?
+        #
+        # Packet loss is measured over a Rician-fading channel, so successive
+        # samples of an unchanged link vary substantially on their own. A bare
+        # "difference exceeds 0.05" rule therefore fires on fading as readily
+        # as on a real effect — in the benchmark it attributed every jammed
+        # link to terrain, because random fluctuation over a short window was
+        # enough to clear the threshold.
+        #
+        # Welch's t statistic on the two windows gives the effect a scale: the
+        # difference is only called real if it is large compared with how much
+        # the measurement was moving anyway.
+        pre = np.asarray(record.pre_loss_samples, dtype=float)
+        post = np.asarray(record.post_loss_samples, dtype=float)
+
+        record.effect_t_stat = 0.0
+        if pre.size >= 3 and post.size >= 3:
+            se = np.sqrt(pre.var(ddof=1) / pre.size + post.var(ddof=1) / post.size)
+            record.effect_t_stat = float(abs(record.pre_loss - record.post_loss)
+                                         / max(se, 1e-6))
+            record.effect_std = float(se)
+        record.post_altitude = float(drone.position[2])
+        record.achieved_dz = record.post_altitude - record.pre_altitude
+        record.causal_effect = record.pre_loss - record.post_loss
         record.end_time = sim_time
 
-        # Estimate causal effect
-        record.delta_loss = record.pre_loss - record.post_loss  # positive = improvement
-        record.causal_effect = record.delta_loss
+        # --- confounding checks -------------------------------------------
+        reasons = []
 
-        # Attribution decision rule
-        if record.delta_loss > self.effect_threshold:
+        if record.j_samples:
+            j_span = float(np.max(record.j_samples) - np.min(record.j_samples))
+            if j_span > self.j_stability_db:
+                reasons.append(
+                    f"noise floor moved {j_span:.1f} dB during the window "
+                    f"(limit {self.j_stability_db:.1f} dB)")
+
+        if record.d_samples:
+            d0 = float(record.d_samples[0])
+            d_span = float(np.max(record.d_samples) - np.min(record.d_samples))
+            if d0 > 1.0 and (d_span / d0) > self.d_stability_frac:
+                reasons.append(
+                    f"range changed {100 * d_span / d0:.0f}% during the window "
+                    f"(limit {100 * self.d_stability_frac:.0f}%)")
+
+        # If the aircraft never actually climbed, there was no intervention
+        if abs(record.achieved_dz) < self.delta_z * 0.4:
+            reasons.append(
+                f"aircraft achieved only {record.achieved_dz:+.1f} m of the "
+                f"commanded {record.delta_z:+.0f} m")
+
+        record.confounded = bool(reasons)
+        record.confound_reason = "; ".join(reasons)
+
+        # --- escalate before concluding "not terrain" -----------------------
+        # A null result at a small probe is only evidence of "no terrain
+        # effect" if the probe was big enough to have produced one. Rather
+        # than concluding from an underpowered test, climb to the next rung
+        # and measure again. Only a null at the top of the ladder is treated
+        # as evidence that terrain is not the cause.
+        effect_detected = (record.causal_effect > self.effect_threshold
+                           and record.effect_t_stat >= self.min_effect_t)
+
+        if (not record.confounded and not effect_detected
+                and record.rung + 1 < len(self.probe_ladder)):
+            record.rung += 1
+            logger.info(
+                "[%s] no effect at +%.0f m (delta %+.3f, t=%.1f) — escalating to +%.0f m",
+                record.intervention_id, record.cumulative_dz,
+                record.causal_effect, record.effect_t_stat,
+                self.probe_ladder[record.rung],
+            )
+            record.phase = PRE
+            # Re-baseline at the altitude we are now at, so the next rung
+            # measures the effect of the *additional* climb rather than
+            # re-measuring the one we already made.
+            record.pre_loss_samples = list(record.post_loss_samples)
+            record.post_loss_samples.clear()
+            record.pre_altitude = float(drone.position[2])
+            record.phase_deadline = sim_time + self.pre_window
+            return None
+
+        # --- attribution ---------------------------------------------------
+        if record.confounded:
+            record.attribution = "indeterminate"
+            record.confidence = 0.0
+            record.recommendation = (
+                "Causal effect NOT identified — the no-confounding assumption "
+                "failed this window. Treat the number as descriptive only. "
+                f"Reason: {record.confound_reason}"
+            )
+        elif (record.causal_effect > self.effect_threshold
+              and record.effect_t_stat >= self.min_effect_t):
             record.attribution = "terrain_occlusion"
-            record.confidence = min(1.0, record.delta_loss / 0.3)
-            logger.info(
-                f"[{record.intervention_id}] TERRAIN OCCLUSION detected | "
-                f"ΔL={record.delta_loss:+.3f} conf={record.confidence:.2f}"
+            record.confidence = float(min(1.0, record.causal_effect / 0.30))
+            record.recommendation = (
+                f"Terrain occlusion confirmed: +{record.achieved_dz:.0f} m reduced "
+                f"packet loss by {record.causal_effect:.1%}. Holding the altitude gain."
             )
-        elif record.delta_loss > 0:
+        elif (record.causal_effect > self.effect_threshold * 0.5
+              and record.effect_t_stat >= self.min_effect_t):
             record.attribution = "partial_terrain"
-            record.confidence = 0.3 + 0.5 * (record.delta_loss / self.effect_threshold)
-            logger.info(
-                f"[{record.intervention_id}] Partial terrain effect | "
-                f"ΔL={record.delta_loss:+.3f}"
+            record.confidence = float(0.3 + 0.4 * record.causal_effect / self.effect_threshold)
+            record.recommendation = (
+                "Altitude helped marginally. Terrain is a contributing but not "
+                "dominant cause — requesting relay repositioning from the GNN."
             )
         else:
-            record.attribution = "hardware_distance_or_jamming"
+            record.attribution = "not_terrain"
             record.confidence = 0.7
-            logger.info(
-                f"[{record.intervention_id}] NOT terrain — likely jamming/distance | "
-                f"ΔL={record.delta_loss:+.3f} → triggering handover"
+            record.recommendation = (
+                "Altitude change produced no effect separable from channel noise "
+                f"(t = {record.effect_t_stat:.1f}), so terrain is excluded. "
+                "Consistent with jamming or range limits; triggering handover."
             )
 
-        record.phase = "complete"
+        # --- act on the finding -------------------------------------------
+        # Only a confirmed terrain effect justifies *keeping* the altitude.
+        # Anything else gives the altitude back rather than leaving the swarm
+        # permanently high on the strength of an inconclusive test.
+        if record.attribution != "terrain_occlusion":
+            drone.altitude_offset_cmd -= record.cumulative_dz
+            record.reverted = True
 
-        # Move to completed
-        del self._active[link_id]
-        self._completed.append(record)
-        self._link_cooldowns[link_id] = sim_time
-
-        return {
-            "intervention_id": record.intervention_id,
+        logger.info(
+            "[%s] effect %+.3f | %s | confounded=%s%s",
+            record.intervention_id, record.causal_effect, record.attribution,
+            record.confounded,
+            f" ({record.confound_reason})" if record.confounded else "",
+        )
+        self.events.append({
+            "time": sim_time,
+            "type": "INTERVENTION_RESULT",
+            "id": record.intervention_id,
+            "link": record.link_id,
             "attribution": record.attribution,
-            "causal_effect": record.causal_effect,
-            "confidence": record.confidence,
-            "delta_loss": record.delta_loss,
-            "pre_loss": record.pre_loss,
-            "post_loss": record.post_loss,
-            "recommendation": self._get_recommendation(record),
-        }
+            "confounded": record.confounded,
+            "message": f"{record.intervention_id}: {record.recommendation}",
+        })
 
-    def _get_recommendation(self, record: InterventionRecord) -> str:
-        """Generate a recommendation based on intervention outcome."""
-        if record.attribution == "terrain_occlusion":
-            return (
-                f"Maintain higher altitude (+{self.delta_z}m). "
-                f"Terrain occlusion reduced packet loss by {record.delta_loss:.1%}."
-            )
-        elif record.attribution == "partial_terrain":
-            return (
-                f"Altitude change partially effective. "
-                f"Consider relay repositioning via GNN for further improvement."
-            )
-        else:
-            return (
-                f"Altitude change ineffective — root cause is likely "
-                f"jamming or distance limits. Trigger relay handover/reroute."
-            )
+        record.phase = COMPLETE
+        self._retire(record, sim_time)
+        return record.to_dict()
 
-    def get_active_interventions(self) -> List[Dict]:
-        """Get currently active interventions."""
-        return [
-            {
-                "id": r.intervention_id,
-                "drone_id": r.drone_id,
-                "link_id": r.link_id,
-                "phase": r.phase,
-                "elapsed": 0.0,
-            }
-            for r in self._active.values()
-        ]
+    def _retire(self, record: InterventionRecord, sim_time: float):
+        self._active.pop(record.link_id, None)
+        self._completed.append(record)
+        self._cooldowns[record.link_id] = sim_time
+        if len(self._completed) > 200:
+            self._completed = self._completed[-120:]
 
-    def get_completed_interventions(self, n: int = 20) -> List[Dict]:
-        """Get N most recent completed interventions."""
-        return [
-            {
-                "id": r.intervention_id,
-                "drone_id": r.drone_id,
-                "link_id": r.link_id,
-                "attribution": r.attribution,
-                "causal_effect": r.causal_effect,
-                "confidence": r.confidence,
-                "delta_loss": r.delta_loss,
-            }
-            for r in self._completed[-n:]
-        ]
+    def abandon_active(self, drones: dict, sim_time: float):
+        """
+        Cancel every in-flight intervention and give back its altitude.
+
+        Used when the causal subsystem is handed to another node: an
+        intervention cannot be completed by an engine that is no longer
+        receiving the loss samples, and its climb must not be left in place.
+        """
+        for record in list(self._active.values()):
+            drone = drones.get(record.drone_id)
+            if drone is not None and record.cumulative_dz:
+                drone.altitude_offset_cmd -= record.cumulative_dz
+            record.phase = COMPLETE
+            record.attribution = "handed_off"
+            record.reverted = True
+            record.end_time = sim_time
+            self._retire(record, sim_time)
+
+    # -- reporting ---------------------------------------------------------
+
+    def drain_events(self) -> List[dict]:
+        events, self.events = self.events, []
+        return events
 
     def get_state(self) -> dict:
-        """Serialize intervention engine state."""
+        completed = [r.to_dict() for r in self._completed[-6:]]
+        identified = [r for r in self._completed
+                      if not r.confounded and r.phase == COMPLETE]
         return {
+            "delta_z": self.delta_z,
             "active_count": len(self._active),
             "completed_count": len(self._completed),
-            "active": self.get_active_interventions(),
-            "recent_completed": self.get_completed_interventions(5),
+            "identified_count": len(identified),
+            "confounded_count": sum(1 for r in self._completed if r.confounded),
+            "active": [r.to_dict() for r in self._active.values()],
+            "recent_completed": completed,
+            "latest": completed[-1] if completed else None,
         }
+
+    def reset(self):
+        self._active.clear()
+        self._completed.clear()
+        self._cooldowns.clear()
+        self.events.clear()
+        self._counter = 0

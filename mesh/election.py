@@ -39,6 +39,8 @@ class RelayElection:
         self._election_log: List[Dict] = []
         self._last_election_time = -float('inf')
         self._last_election_duration_ms = 0.0
+        self._last_heal_latency_ms = 0.0
+        self._heal_log: List[Dict] = []
 
     def compute_election_score(
         self,
@@ -60,6 +62,13 @@ class RelayElection:
 
         return score
 
+    # When relays fall below `relay_count`, promote a scout to relay duty.
+    # Trades survey capacity for backhaul: a scout whose data cannot reach the
+    # ground station has surveyed nothing useful. Compared head-to-head in
+    # bench/relay_strategies.py.
+    PROMOTE_SCOUTS = True
+    MIN_SCOUTS = 1
+
     def run_election(
         self,
         drones: dict,
@@ -67,83 +76,83 @@ class RelayElection:
         force: bool = False,
     ) -> Dict:
         """
-        Run a relay election across the swarm.
+        Minimal-change election: fill only the roles that are now vacant.
 
-        Args:
-            drones: Dict of drone_id -> Drone objects.
-            sim_time: Current simulation time.
-            force: Force re-election even without trigger.
-
-        Returns:
-            Election result dict with timing and role assignments.
+        The previous election re-ranked the whole swarm on every failure and
+        reassigned every role from the ranking — so losing one relay could
+        demote the other relay to scout, or hand the ground-station link to a
+        scout three kilometres up the valley. Operators placing their own
+        relays saw their assignments silently overwritten. Here nothing that
+        still works is ever demoted; only the missing role is filled, by the
+        best-scoring eligible aircraft.
         """
-        start = time.time()
-
+        start = time.perf_counter()
         from sim.drone import DroneRole
 
         alive = {d_id: d for d_id, d in drones.items() if d.is_alive}
         if len(alive) < 2:
             return {"status": "insufficient_nodes", "elapsed_ms": 0}
 
-        # Compute scores
-        scores = {}
-        for d_id, drone in alive.items():
-            link_qualities = list(drone.neighbors.values())
-            mean_quality = np.mean(link_qualities) if link_qualities else 0.0
-            is_scout = drone.role == DroneRole.SCOUT
+        def score(drone):
+            quality = list(drone.neighbors.values())
+            mean_quality = float(np.mean(quality)) if quality else 0.0
+            return self.compute_election_score(
+                drone.battery, mean_quality, drone.role == DroneRole.SCOUT)
 
-            score = self.compute_election_score(drone.battery, mean_quality, is_scout)
-            scores[d_id] = score
+        scores = {d_id: score(d) for d_id, d in alive.items()}
+        promoted = []
 
-        # Sort by score (descending)
-        ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+        # 1. Ground-station relay: replace from the relays nearest home
+        gcs = next((d for d in alive.values() if d.role == DroneRole.GCS_RELAY), None)
+        if gcs is None:
+            lost = next((d for d in drones.values()
+                         if d.role == DroneRole.GCS_RELAY and not d.is_alive), None)
+            home = lost.position if lost is not None else np.zeros(3)
+            pool = [d for d in alive.values() if d.role == DroneRole.RELAY] or \
+                   [d for d in alive.values() if d.role == DroneRole.SCOUT]
+            if pool:
+                best = min(pool, key=lambda d: float(np.linalg.norm(d.position - home))
+                           / (0.2 + scores[d.id]))
+                best.role = DroneRole.GCS_RELAY
+                promoted.append((best.id, "GCS_RELAY"))
 
-        # Assign relay roles to top candidates
-        new_relays = []
-        new_gcs_relay = None
+        # 2. Relay count: optionally promote the best scout
+        relays = [d for d in alive.values() if d.role == DroneRole.RELAY]
+        scouts = [d for d in alive.values() if d.role == DroneRole.SCOUT]
+        if self.PROMOTE_SCOUTS:
+            while len(relays) < self.relay_count and len(scouts) > self.MIN_SCOUTS:
+                best = max(scouts, key=lambda d: scores[d.id])
+                if scores[best.id] <= 0.0:
+                    break
+                best.role = DroneRole.RELAY
+                best.assigned_poi = None
+                scouts.remove(best)
+                relays.append(best)
+                promoted.append((best.id, "RELAY"))
 
-        for i, (d_id, score) in enumerate(ranked):
-            if i == 0 and score > 0:
-                # Best candidate becomes GCS relay
-                alive[d_id].role = DroneRole.GCS_RELAY
-                new_gcs_relay = d_id
-            elif i < self.relay_count and score > 0:
-                alive[d_id].role = DroneRole.RELAY
-                new_relays.append(d_id)
-            else:
-                # Keep as scout if not already a scout with active assignment
-                if alive[d_id].role in (DroneRole.RELAY, DroneRole.GCS_RELAY):
-                    alive[d_id].role = DroneRole.SCOUT
-
-        elapsed_ms = (time.time() - start) * 1000
+        elapsed_ms = (time.perf_counter() - start) * 1000
         self._last_election_duration_ms = elapsed_ms
         self._last_election_time = sim_time
 
+        gcs_now = next((d.id for d in alive.values() if d.role == DroneRole.GCS_RELAY), None)
         result = {
             "status": "ok",
             "elapsed_ms": elapsed_ms,
             "within_target": elapsed_ms < self.election_timeout_ms,
-            "gcs_relay": new_gcs_relay,
-            "relays": new_relays,
+            "gcs_relay": gcs_now,
+            "relays": [d.id for d in relays],
+            "promoted": promoted,
             "scores": scores,
-            "ranked": [(d_id, score) for d_id, score in ranked],
         }
-
         self._election_log.append({
-            "time": sim_time,
-            "elapsed_ms": elapsed_ms,
-            "gcs_relay": new_gcs_relay,
-            "relays": new_relays,
+            "time": sim_time, "elapsed_ms": elapsed_ms,
+            "gcs_relay": gcs_now, "relays": result["relays"], "promoted": promoted,
         })
         if len(self._election_log) > 100:
             self._election_log = self._election_log[-50:]
 
-        logger.info(
-            f"Election complete in {elapsed_ms:.1f}ms | "
-            f"GCS_RELAY={new_gcs_relay} RELAYS={new_relays} "
-            f"{'✓ within target' if elapsed_ms < self.election_timeout_ms else '✗ EXCEEDED TARGET'}"
-        )
-
+        logger.info("Election in %.2f ms | GCS=%s relays=%s promoted=%s",
+                    elapsed_ms, gcs_now, result["relays"], promoted or "none")
         return result
 
     def check_and_heal(
@@ -170,14 +179,65 @@ class RelayElection:
             if d.status == DroneStatus.KILLED and d.role in (DroneRole.RELAY, DroneRole.GCS_RELAY)
         ]
 
-        if not has_gcs_relay or not has_relay or killed_relays:
-            logger.warning(
-                f"Self-healing triggered! killed_relays={killed_relays} "
-                f"has_gcs={has_gcs_relay} has_relay={has_relay}"
-            )
-            return self.run_election(drones, sim_time, force=True)
+        # Only heal failures we have not already healed. `killed_relays` is a
+        # standing condition — a dead node stays dead — so re-running the
+        # election on it every check re-elected the same replacement several
+        # times a second and buried the operator's event log.
+        if not hasattr(self, "_handled_failures"):
+            self._handled_failures = set()
 
-        return None
+        new_failures = [d for d in killed_relays if d not in self._handled_failures]
+        structural_gap = not has_gcs_relay or not has_relay
+
+        if not new_failures and not structural_gap:
+            return None
+
+        if structural_gap and not new_failures and getattr(self, "_gap_healed", False):
+            return None
+
+        logger.warning(
+            "Self-healing triggered: new_failures=%s has_gcs=%s has_relay=%s",
+            new_failures, has_gcs_relay, has_relay,
+        )
+        self._handled_failures.update(new_failures)
+
+        result = self.run_election(drones, sim_time, force=True)
+
+        # Re-check the structural condition after the election so a genuine
+        # unrecoverable gap keeps reporting, but a healed one goes quiet.
+        alive_after = {d_id: d for d_id, d in drones.items() if d.is_alive}
+        self._gap_healed = (
+            any(d.role == DroneRole.GCS_RELAY for d in alive_after.values())
+            and any(d.role == DroneRole.RELAY for d in alive_after.values())
+        )
+        return result
+
+    def record_heal_latency(self, drones: dict, sim_time: float,
+                            extra_ms: float = 0.0) -> float:
+        """
+        End-to-end self-healing latency for the most recent failure.
+
+            (time noticed - time failed)  +  election compute  +  reroute
+
+        This is the number the <300 ms target is actually about. Election
+        compute alone is microseconds and would make any system look
+        instant; the detection delay is where the time goes.
+        """
+        failed_at = [d.killed_at for d in drones.values()
+                     if getattr(d, "killed_at", None) is not None]
+        detection_ms = (sim_time - max(failed_at)) * 1000.0 if failed_at else 0.0
+
+        latency = max(detection_ms, 0.0) + self._last_election_duration_ms + extra_ms
+        self._last_heal_latency_ms = latency
+        self._heal_log.append({
+            "time": sim_time,
+            "detection_ms": detection_ms,
+            "election_ms": self._last_election_duration_ms,
+            "reroute_ms": extra_ms,
+            "total_ms": latency,
+            "within_target": latency < self.election_timeout_ms,
+        })
+        return latency
 
     def get_last_election_time_ms(self) -> float:
         """Get the duration of the last election in ms."""
@@ -186,7 +246,11 @@ class RelayElection:
     def get_state(self) -> dict:
         """Serialize election state."""
         return {
-            "last_election_ms": self._last_election_duration_ms,
+            # End-to-end heal latency is what the dashboard reports; the raw
+            # election compute time is kept alongside it for transparency.
+            "last_election_ms": getattr(self, "_last_heal_latency_ms", 0.0),
+            "last_election_compute_ms": self._last_election_duration_ms,
+            "heals": list(getattr(self, "_heal_log", []))[-5:],
             "election_count": len(self._election_log),
             "recent_elections": self._election_log[-3:],
         }

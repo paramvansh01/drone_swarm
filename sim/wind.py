@@ -53,6 +53,7 @@ class WindField:
         turbulence_intensity: float = 1.0,
         turbulence_scale: float = 50.0,  # meters (spatial correlation length)
         seed: int = 42,
+        terrain=None,
     ):
         """
         Args:
@@ -65,6 +66,17 @@ class WindField:
         self.turbulence_intensity = turbulence_intensity
         self.turbulence_scale = turbulence_scale
         self._rng = np.random.RandomState(seed)
+
+        # Terrain is needed to compute height *above ground*, which is what
+        # the boundary-layer profile actually depends on.
+        self.terrain = terrain
+
+        # Reference height for the power-law profile (m AGL) and the shear
+        # exponent. 0.16 sits between open country (0.14) and rough/broken
+        # terrain (0.20), which is right for a rocky mountain valley.
+        self.reference_height_m = 10.0
+        self.shear_exponent = 0.16
+        self.max_shear_factor = 2.2
 
         # Dryden filter state (discrete-time approximation)
         self._turb_state = np.zeros(3)
@@ -145,13 +157,41 @@ class WindField:
         Returns:
             Wind velocity vector [vx, vy, vz] (m/s) in world frame.
         """
-        # Base wind (optionally altitude-dependent: wind increases with height)
-        altitude = max(position[2], 0.0)
-        altitude_factor = 1.0 + 0.02 * altitude  # mild increase with altitude
-        wind = self.base_wind * altitude_factor
+        # Base wind, scaled by the atmospheric boundary-layer profile.
+        #
+        # Wind shear is a function of height ABOVE GROUND, not altitude above
+        # sea level. Using absolute altitude here (as an earlier version did)
+        # multiplied the wind by the terrain elevation: at a 900 m valley
+        # floor it produced 120 m/s, roughly twice the strongest tornado ever
+        # recorded, which no controller can or should hold station in.
+        #
+        # The power law v(h) = v_ref * (h / h_ref)^alpha is the standard
+        # engineering profile, and it is capped because it is only valid
+        # within the surface layer.
+        ground = (self.terrain.height_at(float(position[0]), float(position[1]))
+                  if self.terrain is not None else 0.0)
+        agl = max(float(position[2]) - ground, 0.5)
 
-        # Turbulence
-        wind += self._dryden_turbulence(dt, airspeed=np.linalg.norm(self.base_wind) + 5.0)
+        shear = (agl / self.reference_height_m) ** self.shear_exponent
+        shear = float(np.clip(shear, 0.25, self.max_shear_factor))
+
+        wind = self.base_wind * shear
+
+        # Turbulence, roughened by convective rainfall
+        rough = getattr(self, "rain_turbulence", 1.0)
+        wind += self._dryden_turbulence(dt, airspeed=np.linalg.norm(self.base_wind) + 5.0) * rough
+
+        # Mountain-wave / downdraught cells: a strong sink inside the cell,
+        # tapering to nothing at its edge. This is what pushes an aircraft
+        # into the ground if it flies through one.
+        for cell in getattr(self, "cells", ()):
+            offset = np.asarray(position[:2], dtype=float) - cell["centre"]
+            reach = float(np.linalg.norm(offset))
+            if reach < cell["radius"]:
+                falloff = 0.5 * (1.0 + np.cos(np.pi * reach / cell["radius"]))
+                wind = wind + np.array([cell["drift"][0] * 0.25 * falloff,
+                                        cell["drift"][1] * 0.25 * falloff,
+                                        cell["w_z"] * falloff])
 
         # Discrete gusts
         for gust in self.gusts:

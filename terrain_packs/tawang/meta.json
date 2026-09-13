@@ -1,0 +1,42 @@
+{
+  "id": "tawang",
+  "name": "Tawang",
+  "region": "Tawang, Arunachal Pradesh",
+  "lat": 27.588,
+  "lon": 91.865,
+  "size_m": 5120.0,
+  "snow_line_m": 4500.0,
+  "description": "Forested, deeply dissected valleys of the Tawang Chu. Heavy cloud and vegetation: GNSS and radio are both degraded.",
+  "use_case": "Sector surveillance, landslide response",
+  "resolution": 1025,
+  "context_size_m": 35840.0,
+  "context_resolution": 513,
+  "min_height_m": 1960.7208251953125,
+  "max_height_m": 3530.670654296875,
+  "rotation_k": 0,
+  "north_bearing_deg": 90.0,
+  "inner_bounds": [
+    27.565000717668134,
+    27.61099445931968,
+    91.83905296636976,
+    91.89094703363031
+  ],
+  "context_bounds": [
+    27.42690389160333,
+    27.74885978151861,
+    91.68337076458812,
+    92.0466292354119
+  ],
+  "sources": {
+    "elevation": "AWS Open Data Terrain Tiles (Terrarium; SRTM/Copernicus-derived)",
+    "imagery": "Sentinel-2 cloudless - https://s2maps.eu by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2016), CC BY 4.0",
+    "imagery_hr": "Esri World Imagery \u2014 Esri, Maxar, Earthstar Geographics, and the GIS User Community (local cache, not redistributed)"
+  },
+  "built": "2026-09-12",
+  "mid_bounds": [
+    26.867006630645918,
+    28.304283688071823,
+    91.05415519905404,
+    92.67584480094604
+  ]
+}

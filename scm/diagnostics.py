@@ -48,18 +48,46 @@ class OnlineDiagnostics:
         self.min_observations = min_observations
 
         # RLS state
-        n_params = 5  # [β₀, β_T, β_D, β_J, β_θ]
-        self.P = np.eye(n_params) * 100.0  # covariance matrix (large init = uncertain)
-        self.theta_rls = self.dag.get_beta_vector()  # parameter estimate
+        n_params = 6  # [β₀, β_T, β_D, β_J, β_θ, β_W]
+
+        # Covariance initialised at 10, not 100. The structural coefficients
+        # have physics-informed priors that are already roughly right, so
+        # declaring near-total ignorance just invites the first few noisy
+        # observations to throw them a long way.
+        self.P = np.eye(n_params) * 10.0
+        self.theta_rls = self.dag.get_beta_vector()
+
+        # Admissible range for each coefficient. The signs are known from
+        # physics — more terrain obstruction, more range and more jamming can
+        # only ever increase packet loss, and better antenna alignment can
+        # only decrease it — and the magnitudes are bounded by what a logistic
+        # link can mean over inputs normalised to [0, 1].
+        #
+        # Without this the estimator wanders: the regressors are strongly
+        # collinear in normal flight (distance and terrain obstruction rise
+        # together as a drone flies up the valley), so the likelihood surface
+        # has a long flat valley and RLS slides along it to values like
+        # beta_theta = -27, which fit equally well and mean nothing. Bounding
+        # the parameters keeps the fitted model interpretable, which is the
+        # entire reason for having a structural model rather than a regressor.
+        self.beta_bounds = np.array([
+            [-6.0,  2.0],    # beta_0   intercept
+            [ 0.0,  8.0],    # beta_T   terrain occlusion
+            [ 0.0,  8.0],    # beta_D   distance
+            [ 0.0, 10.0],    # beta_J   jamming
+            [-6.0,  0.0],    # beta_theta  antenna alignment
+            [ 0.0,  8.0],    # beta_W   weather (rain, turbulence)
+        ])
 
         # Observation buffer
         self._obs_buffer: List[dict] = []
         self._anomaly_log: List[dict] = []
         self._diagnosis_log: List[dict] = []
 
-    def _build_feature_vector(self, T: float, D: float, J: float, theta: float) -> np.ndarray:
-        """Build the feature vector [1, T, D, J, θ] for RLS."""
-        return np.array([1.0, T, D, J, theta])
+    def _build_feature_vector(self, T: float, D: float, J: float, theta: float,
+                              W: float = 0.0) -> np.ndarray:
+        """Build the feature vector [1, T, D, J, θ, W] for RLS."""
+        return np.array([1.0, T, D, J, theta, W])
 
     def update(
         self,
@@ -70,6 +98,7 @@ class OnlineDiagnostics:
         observed_loss: float,
         sim_time: float,
         link_id: str = "",
+        weather: float = 0.0,
     ) -> Dict:
         """
         Process a new observation and update the SCM.
@@ -91,11 +120,13 @@ class OnlineDiagnostics:
             occlusion_db, distance_m, noise_floor_dbm, antenna_factor
         )
 
+        W = float(np.clip(weather, 0.0, 1.0))
+
         # Store observation
         obs = {
             "time": sim_time,
             "link_id": link_id,
-            "T": T, "D": D, "J": J, "theta": theta,
+            "T": T, "D": D, "J": J, "theta": theta, "W": W,
             "observed_loss": observed_loss,
         }
         self._obs_buffer.append(obs)
@@ -104,25 +135,26 @@ class OnlineDiagnostics:
 
         # RLS update
         if len(self._obs_buffer) >= self.min_observations:
-            self._rls_update(T, D, J, theta, observed_loss)
+            self._rls_update(T, D, J, theta, observed_loss, W)
 
         # Update DAG variable values
         self.dag.variables["T"].value = T
         self.dag.variables["D"].value = D
         self.dag.variables["J"].value = J
         self.dag.variables["θ"].value = theta
+        self.dag.variables["W"].value = W
         self.dag.variables["L"].value = observed_loss
 
         # Predict loss with current model
-        predicted_loss = self.dag.predict_loss(T, D, J, theta)
+        predicted_loss = self.dag.predict_loss(T, D, J, theta, W)
 
         # Anomaly detection
         is_anomaly = observed_loss > self.loss_threshold
         prediction_error = abs(observed_loss - predicted_loss)
 
         # Root cause analysis
-        root_cause, contribution = self.dag.identify_root_cause(T, D, J, theta)
-        contributions = self.dag.compute_causal_contributions(T, D, J, theta)
+        root_cause, contribution = self.dag.identify_root_cause(T, D, J, theta, W)
+        contributions = self.dag.compute_causal_contributions(T, D, J, theta, W)
 
         diagnosis = {
             "time": sim_time,
@@ -135,7 +167,7 @@ class OnlineDiagnostics:
             "root_cause_contribution": contribution,
             "contributions": contributions,
             "coefficients": dict(self.dag.beta),
-            "variables": {"T": T, "D": D, "J": J, "θ": theta},
+            "variables": {"T": T, "D": D, "J": J, "θ": theta, "W": W},
         }
 
         if is_anomaly:
@@ -151,7 +183,8 @@ class OnlineDiagnostics:
 
         return diagnosis
 
-    def _rls_update(self, T: float, D: float, J: float, theta: float, y: float):
+    def _rls_update(self, T: float, D: float, J: float, theta: float, y: float,
+                    W: float = 0.0):
         """
         Recursive Least Squares update.
 
@@ -161,7 +194,7 @@ class OnlineDiagnostics:
         Uses the logistic model linearization for compatibility with the
         sigmoid structural equation.
         """
-        x = self._build_feature_vector(T, D, J, theta)
+        x = self._build_feature_vector(T, D, J, theta, W)
 
         # Predicted output (linear part before sigmoid)
         y_hat_linear = np.dot(self.theta_rls, x)
@@ -179,16 +212,29 @@ class OnlineDiagnostics:
         denominator = self.lambda_ + x @ Px
         K = Px / denominator
 
-        # Update parameter estimate
-        self.theta_rls += K * innovation * sigmoid_grad
+        # Update parameter estimate, then project back into the admissible set
+        self.theta_rls = self.theta_rls + K * innovation * sigmoid_grad
+        self.theta_rls = np.clip(
+            self.theta_rls, self.beta_bounds[:, 0], self.beta_bounds[:, 1])
 
         # Update covariance
         self.P = (self.P - np.outer(K, Px)) / self.lambda_
 
-        # Keep covariance bounded
+        # Symmetrise: the update above is algebraically symmetric but not
+        # numerically, and asymmetry accumulates into indefiniteness.
+        self.P = 0.5 * (self.P + self.P.T)
+
+        # Keep the covariance positive definite and bounded. With a
+        # forgetting factor below 1 the covariance grows without bound in
+        # directions the data does not excite ("covariance wind-up"), and a
+        # single observation in such a direction then produces an enormous
+        # correction.
         eigenvalues = np.linalg.eigvalsh(self.P)
         if np.min(eigenvalues) < 1e-6:
             self.P += np.eye(len(self.theta_rls)) * 1e-4
+        max_eig = float(np.max(eigenvalues))
+        if max_eig > 1e4:
+            self.P *= 1e4 / max_eig
 
         # Update DAG coefficients
         self.dag.set_beta_vector(self.theta_rls)

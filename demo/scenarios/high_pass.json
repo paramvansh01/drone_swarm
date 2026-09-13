@@ -1,0 +1,24 @@
+{
+  "name": "high_pass",
+  "description": "Harder variant: a narrower, steeper corridor with a higher snow line and more aggressive meander, so more survey targets fall into terrain shadow and the relay mesh has to work for its connectivity.",
+  "frequency_mhz": 900.0,
+  "terrain": {
+    "seed": 90210,
+    "size_m": 4096.0,
+    "resolution": 513,
+    "valley_floor_m": 780.0,
+    "peak_height_m": 2150.0,
+    "snow_line_m": 1500.0,
+    "corridor_half_width_m": 130.0,
+    "corridor_wall_falloff_m": 260.0,
+    "corridor_amplitude_m": 520.0,
+    "octaves": 9
+  },
+  "mission": {
+    "start_x": 300.0,
+    "end_x": 3500.0,
+    "num_pois": 7,
+    "rubble_count": 14,
+    "seed": 77
+  }
+}

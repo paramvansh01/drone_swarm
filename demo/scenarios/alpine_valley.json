@@ -1,0 +1,22 @@
+{
+  "name": "alpine_valley",
+  "description": "Standard demonstration scenario. A 4 km glaciated valley with ridges rising 400-700 m above the corridor floor, six survey targets spread along 3.3 km of the mission axis, and scattered rubble on the valley bed.",
+  "frequency_mhz": 900.0,
+  "terrain": {
+    "seed": 4207,
+    "size_m": 4096.0,
+    "resolution": 513,
+    "valley_floor_m": 620.0,
+    "peak_height_m": 1850.0,
+    "snow_line_m": 1350.0,
+    "corridor_half_width_m": 190.0,
+    "corridor_amplitude_m": 380.0
+  },
+  "mission": {
+    "start_x": 260.0,
+    "end_x": 3600.0,
+    "num_pois": 6,
+    "rubble_count": 10,
+    "seed": 42
+  }
+}

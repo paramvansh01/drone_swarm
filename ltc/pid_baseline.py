@@ -1,25 +1,42 @@
 """
 Cascaded PID flight controller baseline for C-DAWN.
 
-Standard PID controller with identical interface to the LTC controller,
-enabling direct A/B comparison under the same wind-gust profiles.
+This is the control-engineering reference the LTC controller is measured
+against. It is deliberately a *strong* baseline, structured the way a real
+autopilot does it (PX4 / ArduPilot style):
+
+    position error --P--> velocity setpoint --PID--> acceleration --> force
+
+Gains are tuned for the 1.9 kg airframe in `sim.physics`, not left at
+textbook defaults, because beating a badly-tuned baseline would prove
+nothing. What it does *not* have is a wind-feedforward term — production
+multirotor autopilots do not estimate and cancel wind either; they reject it
+reactively through the integrator. That is exactly the gap the LTC
+controller is claimed to close, and it is stated openly rather than
+engineered into the baseline's disadvantage.
 """
 
 import numpy as np
-from typing import Tuple, Optional
+from typing import Tuple
 
 
 class PIDController:
-    """Single-axis PID controller with anti-windup."""
+    """Single-axis PID with derivative filtering and proper anti-windup."""
 
-    def __init__(self, kp: float, ki: float, kd: float, output_limit: float = float('inf')):
+    def __init__(self, kp: float, ki: float, kd: float,
+                 output_limit: float = float("inf"),
+                 integral_limit: float = float("inf"),
+                 derivative_tau: float = 0.04):
         self.kp = kp
         self.ki = ki
         self.kd = kd
         self.output_limit = output_limit
+        self.integral_limit = integral_limit
+        self.derivative_tau = derivative_tau
 
         self._integral = 0.0
         self._prev_error = 0.0
+        self._deriv_filtered = 0.0
         self._initialized = False
 
     def compute(self, error: float, dt: float) -> float:
@@ -27,129 +44,130 @@ class PIDController:
             self._prev_error = error
             self._initialized = True
 
-        # Proportional
         p = self.kp * error
 
-        # Integral with anti-windup
-        self._integral += error * dt
-        self._integral = np.clip(
-            self._integral,
-            -self.output_limit / (self.ki + 1e-8),
-            self.output_limit / (self.ki + 1e-8),
-        )
-        i = self.ki * self._integral
-
-        # Derivative
-        d = self.kd * (error - self._prev_error) / (dt + 1e-8)
+        # Low-pass filtered derivative — raw differencing of a noisy error
+        # signal at 50 Hz would inject far more noise than useful damping.
+        raw_deriv = (error - self._prev_error) / max(dt, 1e-6)
+        alpha = dt / (self.derivative_tau + dt)
+        self._deriv_filtered += alpha * (raw_deriv - self._deriv_filtered)
+        d = self.kd * self._deriv_filtered
         self._prev_error = error
 
-        # Total output
-        output = p + i + d
-        return float(np.clip(output, -self.output_limit, self.output_limit))
+        # Conditional integration: stop winding up once saturated
+        unsaturated = p + d + self.ki * self._integral
+        if abs(unsaturated) < self.output_limit:
+            self._integral += error * dt
+            self._integral = float(np.clip(self._integral,
+                                           -self.integral_limit,
+                                           self.integral_limit))
+        i = self.ki * self._integral
+
+        return float(np.clip(p + i + d, -self.output_limit, self.output_limit))
 
     def reset(self):
         self._integral = 0.0
         self._prev_error = 0.0
+        self._deriv_filtered = 0.0
         self._initialized = False
 
 
 class CascadedPIDFlightController:
     """
-    Cascaded PID flight controller.
+    Cascaded position/velocity controller producing a world-frame force.
 
-    Structure:
-        Position PID → Velocity PID → Thrust output
-
-    Tuned for nominal conditions. Provides baseline comparison
-    for the LTC controller under wind gusts.
+    Interface is identical to :class:`ltc.ltc_controller.LTCFlightController`
+    so the two can be swapped on the same airframe under the same wind.
     """
 
     def __init__(
         self,
-        mass: float = 1.5,
-        max_thrust: float = 30.0,
+        mass: float = 1.9,
+        max_thrust: float = 42.0,
         max_yaw_rate: float = 2.0,
+        max_speed: float = 22.0,
     ):
         self.mass = mass
         self.max_thrust = max_thrust
         self.max_yaw_rate = max_yaw_rate
+        self.max_speed = max_speed
 
-        # Outer loop: position → desired velocity
-        self.pos_pid_x = PIDController(kp=2.0, ki=0.1, kd=0.5, output_limit=10.0)
-        self.pos_pid_y = PIDController(kp=2.0, ki=0.1, kd=0.5, output_limit=10.0)
-        self.pos_pid_z = PIDController(kp=3.0, ki=0.2, kd=1.0, output_limit=10.0)
+        # Outer loop: position error -> velocity setpoint (pure P, as in PX4)
+        self.kp_pos = np.array([1.35, 1.35, 1.6])
 
-        # Inner loop: velocity error → desired acceleration
-        self.vel_pid_x = PIDController(kp=4.0, ki=0.3, kd=0.8, output_limit=15.0)
-        self.vel_pid_y = PIDController(kp=4.0, ki=0.3, kd=0.8, output_limit=15.0)
-        self.vel_pid_z = PIDController(kp=5.0, ki=0.5, kd=1.5, output_limit=20.0)
+        # Inner loop: velocity error -> acceleration command
+        self.vel_pid_x = PIDController(kp=3.4, ki=1.1, kd=0.28,
+                                       output_limit=12.0, integral_limit=5.0)
+        self.vel_pid_y = PIDController(kp=3.4, ki=1.1, kd=0.28,
+                                       output_limit=12.0, integral_limit=5.0)
+        self.vel_pid_z = PIDController(kp=4.6, ki=1.8, kd=0.35,
+                                       output_limit=14.0, integral_limit=6.0)
 
-        # Yaw controller
-        self.yaw_pid = PIDController(kp=2.0, ki=0.0, kd=0.5, output_limit=max_yaw_rate)
+        self.yaw_pid = PIDController(kp=2.2, ki=0.0, kd=0.25,
+                                     output_limit=max_yaw_rate)
 
     def compute_control(
         self,
         position_error: np.ndarray,
         velocity: np.ndarray,
         wind_estimate: np.ndarray,
-        yaw_error: float,
+        yaw_error: float = 0.0,
         dt: float = 0.02,
+        velocity_setpoint: np.ndarray = None,
     ) -> Tuple[np.ndarray, float]:
         """
-        Compute control output.
+        Compute the commanded world-frame force.
 
         Args:
-            position_error: [3] target_pos - current_pos
-            velocity: [3] current velocity
-            wind_estimate: [3] estimated wind (for feedforward, not used by PID baseline)
-            yaw_error: Yaw angle error (rad)
-            dt: Timestep
+            position_error: target_pos - current_pos  [3]
+            velocity: current world-frame velocity    [3]
+            wind_estimate: accepted for interface parity; **unused**
+            yaw_error: heading error (rad)
+            velocity_setpoint: optional feedforward velocity from guidance
 
         Returns:
-            (thrust_command, yaw_rate): thrust [3] body frame, yaw rate scalar
+            (force_world_N [3], yaw_rate)
         """
-        # Outer loop: position → desired velocity
-        desired_vx = self.pos_pid_x.compute(position_error[0], dt)
-        desired_vy = self.pos_pid_y.compute(position_error[1], dt)
-        desired_vz = self.pos_pid_z.compute(position_error[2], dt)
+        position_error = np.asarray(position_error, dtype=np.float64)
+        velocity = np.asarray(velocity, dtype=np.float64)
 
-        # Velocity error
-        vel_error = np.array([desired_vx, desired_vy, desired_vz]) - velocity
+        # Outer loop -> velocity setpoint, saturated to the speed envelope
+        vel_sp = self.kp_pos * position_error
+        if velocity_setpoint is not None:
+            vel_sp = vel_sp + np.asarray(velocity_setpoint, dtype=np.float64)
 
-        # Inner loop: velocity error → desired acceleration
-        ax = self.vel_pid_x.compute(vel_error[0], dt)
-        ay = self.vel_pid_y.compute(vel_error[1], dt)
-        az = self.vel_pid_z.compute(vel_error[2], dt)
+        sp_mag = float(np.linalg.norm(vel_sp))
+        if sp_mag > self.max_speed:
+            vel_sp *= self.max_speed / sp_mag
 
-        # Convert acceleration to thrust (F = ma) + gravity compensation
-        thrust = np.array([ax, ay, az + 9.81]) * self.mass
+        vel_error = vel_sp - velocity
 
-        # Clamp thrust magnitude
-        thrust_mag = np.linalg.norm(thrust)
-        if thrust_mag > self.max_thrust:
-            thrust = thrust * (self.max_thrust / thrust_mag)
+        accel = np.array([
+            self.vel_pid_x.compute(vel_error[0], dt),
+            self.vel_pid_y.compute(vel_error[1], dt),
+            self.vel_pid_z.compute(vel_error[2], dt),
+        ])
 
-        # Yaw rate
+        # Force = m * (a_cmd + g_compensation)
+        force = self.mass * (accel + np.array([0.0, 0.0, 9.81]))
+
+        mag = float(np.linalg.norm(force))
+        if mag > self.max_thrust:
+            force *= self.max_thrust / mag
+
         yaw_rate = self.yaw_pid.compute(yaw_error, dt)
-
-        return thrust, yaw_rate
+        return force, yaw_rate
 
     def reset(self):
-        """Reset all PID states."""
-        for pid in [
-            self.pos_pid_x, self.pos_pid_y, self.pos_pid_z,
-            self.vel_pid_x, self.vel_pid_y, self.vel_pid_z,
-            self.yaw_pid,
-        ]:
+        for pid in (self.vel_pid_x, self.vel_pid_y, self.vel_pid_z, self.yaw_pid):
             pid.reset()
 
 
 def make_pid_controller_hook(controller: CascadedPIDFlightController):
     """
-    Create a controller hook function for the simulation runner.
+    Wrap a PID controller as a simulation-runner controller hook:
 
-    Returns a callable with signature:
-        controller_hook(drone, wind_vel, sim_time, dt)
+        hook(drone, wind_vel, sim_time, dt)
     """
     def controller_hook(drone, wind_vel, sim_time, dt):
         if drone.target_position is None:
@@ -158,14 +176,15 @@ def make_pid_controller_hook(controller: CascadedPIDFlightController):
             return
 
         pos_error = drone.target_position - drone.position
-        velocity = drone.velocity
-        wind_est = drone.sensors.wind_estimate
-
-        thrust, yaw_rate = controller.compute_control(
-            pos_error, velocity, wind_est, 0.0, dt
+        force, yaw_rate = controller.compute_control(
+            position_error=pos_error,
+            velocity=drone.velocity,
+            wind_estimate=drone.sensors.wind_estimate,
+            yaw_error=0.0,
+            dt=dt,
+            velocity_setpoint=drone.target_velocity,
         )
-
-        drone.thrust_command = thrust
+        drone.thrust_command = force
         drone.yaw_rate_command = yaw_rate
 
     return controller_hook

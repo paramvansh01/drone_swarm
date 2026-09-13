@@ -1,123 +1,156 @@
 """
-Telemetry aggregation and broadcast for C-DAWN GCS.
+Telemetry aggregation for the C-DAWN GCS.
 
-Aggregates telemetry from all simulation components into unified
-snapshots for the dashboard.
+Collects the simulation tick stream plus each subsystem's state into a single
+snapshot for the dashboard, and keeps bounded time-series histories for the
+live charts.
+
+Sampling note
+-------------
+The simulation runs at 50 Hz but the dashboard streams at 20 Hz and the charts
+plot minutes of history. Appending every tick to every series would grow the
+snapshot without adding information the operator can see, so the histories are
+decimated to 5 Hz. The metrics themselves are still computed every tick — only
+the plotted series is thinned.
 """
 
-import numpy as np
-import time
+from __future__ import annotations
+
 import logging
-from typing import Dict, Optional, List
+import time
 from collections import deque
+from typing import Deque, Optional
 
 logger = logging.getLogger("cdawn.gcs.telemetry")
 
+# Decimation: keep one history sample every N simulation ticks (50 Hz -> 5 Hz)
+HISTORY_STRIDE = 10
+
 
 class TelemetryAggregator:
-    """
-    Aggregates telemetry from the simulation runner and all
-    subsystems into a unified snapshot for the dashboard.
-    """
+    """Builds dashboard snapshots from simulation + subsystem state."""
 
-    def __init__(self, history_length: int = 300):
+    def __init__(self, history_length: int = 900):   # 900 @ 5 Hz = 3 minutes
         self.history_length = history_length
 
-        # Latest snapshot from simulation
-        self._latest_snapshot: Optional[dict] = None
-
-        # Time-series data for charts
-        self._pdr_history = deque(maxlen=history_length)
-        self._battery_history = deque(maxlen=history_length)
-        self._election_history = deque(maxlen=history_length)
-
-        # Component states
-        self._causal_state: Optional[dict] = None
-        self._gnn_state: Optional[dict] = None
-        self._mesh_state: Optional[dict] = None
-        self._election_state: Optional[dict] = None
-        self._sitrep_state: Optional[dict] = None
-        self._intervention_state: Optional[dict] = None
-
+        self._latest: Optional[dict] = None
         self._update_count = 0
 
+        self._pdr_history: Deque[dict] = deque(maxlen=history_length)
+        self._backhaul_history: Deque[dict] = deque(maxlen=history_length)
+        self._battery_history: Deque[dict] = deque(maxlen=history_length)
+        self._control_history: Deque[dict] = deque(maxlen=history_length)
+        self._election_history: Deque[dict] = deque(maxlen=60)
+
+        self._causal: Optional[dict] = None
+        self._gnn: Optional[dict] = None
+        self._mesh: Optional[dict] = None
+        self._election: Optional[dict] = None
+        self._sitrep: Optional[dict] = None
+        self._cluster: Optional[dict] = None
+        self._demo: Optional[dict] = None
+
+    # -- ingestion ---------------------------------------------------------
+
     def update(self, telemetry: dict):
-        """Ingest a telemetry tick from the simulation runner."""
-        self._latest_snapshot = telemetry
+        """Ingest one simulation tick."""
+        self._latest = telemetry
         self._update_count += 1
 
-        metrics = telemetry.get("metrics", {})
-        sim_time = telemetry.get("sim_time", 0)
+        tick = telemetry.get("tick", 0)
+        if tick % HISTORY_STRIDE:
+            return
 
-        # Append to time series
+        metrics = telemetry.get("metrics", {})
+        sim_time = telemetry.get("sim_time", 0.0)
+
         self._pdr_history.append({
-            "time": sim_time,
-            "value": metrics.get("swarm_pdr", 0),
-        })
+            "t": sim_time, "value": metrics.get("swarm_pdr", 0.0)})
+        self._backhaul_history.append({
+            "t": sim_time, "value": metrics.get("backhaul_pdr", 0.0)})
         self._battery_history.append({
-            "time": sim_time,
-            "value": metrics.get("avg_battery", 100),
+            "t": sim_time, "value": metrics.get("avg_battery", 100.0)})
+        self._control_history.append({
+            "t": sim_time,
+            "active": metrics.get("tracking_error_m", 0.0),
+            "shadow": metrics.get("shadow_divergence_ms2", 0.0),
         })
 
     def update_causal(self, state: dict):
-        self._causal_state = state
+        self._causal = state
 
     def update_gnn(self, state: dict):
-        self._gnn_state = state
+        self._gnn = state
 
     def update_mesh(self, state: dict):
-        self._mesh_state = state
+        self._mesh = state
 
     def update_election(self, state: dict):
-        self._election_state = state
-        if "last_election_ms" in state:
-            self._election_history.append({
-                "time": time.time(),
-                "value": state["last_election_ms"],
-            })
+        self._election = state
+        last = state.get("last_election_ms")
+        if last is not None:
+            if not self._election_history or \
+                    self._election_history[-1].get("value") != last:
+                self._election_history.append({"t": time.time(), "value": last})
 
     def update_sitrep(self, state: dict):
-        self._sitrep_state = state
+        self._sitrep = state
 
-    def update_interventions(self, state: dict):
-        self._intervention_state = state
+    def update_cluster(self, state: dict):
+        self._cluster = state
+
+    def update_demo(self, state: dict):
+        self._demo = state
+
+    # -- output ------------------------------------------------------------
 
     def get_snapshot(self) -> dict:
-        """Get the full telemetry snapshot for WebSocket broadcast."""
-        snapshot = self._latest_snapshot or {}
+        """Full snapshot broadcast to every connected dashboard."""
+        latest = self._latest or {}
 
         return {
             "type": "telemetry",
-            "sim_time": snapshot.get("sim_time", 0),
-            "tick": snapshot.get("tick", 0),
-            "drones": snapshot.get("drones", {}),
-            "metrics": snapshot.get("metrics", {}),
-            "rf": snapshot.get("rf", {}),
-            "wind": snapshot.get("wind", {}),
-            "world": snapshot.get("world", {}),
-            "causal": self._causal_state,
-            "gnn": self._gnn_state,
-            "mesh": self._mesh_state,
-            "election": self._election_state,
-            "sitrep": self._sitrep_state,
-            "interventions": self._intervention_state,
+            "sim_time": latest.get("sim_time", 0.0),
+            "tick": latest.get("tick", 0),
+            "drones": latest.get("drones", {}),
+            "metrics": latest.get("metrics", {}),
+            "rf": latest.get("rf", {}),
+            "wind": latest.get("wind", {}),
+            "pois": latest.get("pois", []),
+            "interceptors": latest.get("interceptors", []),
+            "injects": latest.get("injects", {}),
+            "mission": latest.get("mission", {}),
+            "events": latest.get("events", []),
+            "causal": self._causal,
+            "gnn": self._gnn,
+            "mesh": self._mesh,
+            "election": self._election,
+            "sitrep": self._sitrep,
+            "cluster": self._cluster,
+            "demo": self._demo,
             "charts": {
-                "pdr": list(self._pdr_history)[-60:],
-                "battery": list(self._battery_history)[-60:],
+                "pdr": list(self._pdr_history)[-240:],
+                "backhaul": list(self._backhaul_history)[-240:],
+                "battery": list(self._battery_history)[-240:],
+                "control": list(self._control_history)[-240:],
                 "election": list(self._election_history)[-20:],
             },
         }
 
     def get_metrics(self) -> dict:
-        """Get current metrics only."""
-        if self._latest_snapshot:
-            return self._latest_snapshot.get("metrics", {})
-        return {}
+        return (self._latest or {}).get("metrics", {})
 
     def get_summary(self) -> dict:
-        """Get a compact summary."""
         return {
             "update_count": self._update_count,
-            "has_data": self._latest_snapshot is not None,
-            "latest_time": self._latest_snapshot.get("sim_time", 0) if self._latest_snapshot else 0,
+            "has_data": self._latest is not None,
+            "latest_time": (self._latest or {}).get("sim_time", 0.0),
         }
+
+    def reset(self):
+        for history in (self._pdr_history, self._backhaul_history,
+                        self._battery_history, self._control_history,
+                        self._election_history):
+            history.clear()
+        self._latest = None
+        self._update_count = 0

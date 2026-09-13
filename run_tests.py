@@ -18,6 +18,7 @@ from tests import test_scm
 from tests import test_mesh
 from tests import test_rag
 from tests import test_demo
+from tests import test_cluster
 
 test_modules = [
     ("Phase 1: Simulation Engine", test_simulation),
@@ -27,6 +28,7 @@ test_modules = [
     ("Phase 6: Mesh Network & Routing", test_mesh),
     ("Phase 5: RAG Intelligence Pipeline", test_rag),
     ("Phase 8: Scenarios & Telemetry", test_demo),
+    ("Phase 9: Three-Node Cluster", test_cluster),
 ]
 
 def main():
