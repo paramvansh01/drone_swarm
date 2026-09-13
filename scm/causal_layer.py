@@ -156,6 +156,8 @@ class CausalLayer:
                 noise_dbm=noise_dbm,
                 distance_m=distance,
                 sim_time=sim_time,
+                # The swarm's own map-based prediction of ridge loss on this link
+                obstruction_db=occlusion,
             )
             if result:
                 results.append(result)

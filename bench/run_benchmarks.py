@@ -349,9 +349,14 @@ def bench_causal(trials: int = 24) -> dict:
 
             noise = (rf.jamming_power_dbm if rf.jamming_active
                      else rf.noise_floor_dbm)
+            # The swarm's map-based ridge-loss prediction, with realistic
+            # elevation-model / vegetation error — not the true channel value
+            predicted_db = (world.compute_rf_occlusion_db(node_a.position, node_b.position)
+                            + rng.normal(0.0, 4.0))
             result = engine.update(
                 "RELAY-A<->SCOUT-B", node_a, measure(), noise,
                 float(np.linalg.norm(node_a.position - node_b.position)), t,
+                obstruction_db=predicted_db,
             )
             if result:
                 break
@@ -368,7 +373,8 @@ def bench_causal(trials: int = 24) -> dict:
         scored += 1
         by_truth[truth]["total"] += 1
 
-        attributed_terrain = result["attribution"] in ("terrain_occlusion", "partial_terrain")
+        attributed_terrain = result["attribution"] in ("terrain_occlusion", "partial_terrain",
+                                                        "terrain_shadow")
         hit = attributed_terrain if truth == "terrain" else not attributed_terrain
         if hit:
             correct += 1

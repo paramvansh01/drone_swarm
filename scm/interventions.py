@@ -65,6 +65,8 @@ class InterventionRecord:
     pre_loss_samples: List[float] = field(default_factory=list)
     post_loss_samples: List[float] = field(default_factory=list)
     j_samples: List[float] = field(default_factory=list)
+    # Map-predicted terrain loss on the link (dB), from the elevation model
+    obstruction_samples: List[float] = field(default_factory=list)
     d_samples: List[float] = field(default_factory=list)
 
     pre_altitude: float = 0.0
@@ -147,6 +149,13 @@ class InterventionEngine:
         # called real rather than fading.
         min_effect_t: float = 2.0,
         j_stability_db: float = 2.5,
+        # Thermal noise floor of the receivers (dBm). A measured floor this
+        # far above it is direct evidence of interference.
+        thermal_floor_dbm: float = -100.0,
+        # Map-predicted terrain loss above which a link is in deep shadow.
+        deep_shadow_db: float = 12.0,
+        # Noise-floor rise that counts as evidence of interference.
+        jam_rise_db: float = 6.0,
         # Likewise for range: the aircraft must not have closed significantly.
         d_stability_frac: float = 0.08,
         max_accumulated_offset: float = 90.0,
@@ -162,6 +171,9 @@ class InterventionEngine:
         self.cooldown = cooldown
         self.max_interventions_per_link = max_interventions_per_link
         self.j_stability_db = j_stability_db
+        self.thermal_floor_dbm = thermal_floor_dbm
+        self.deep_shadow_db = deep_shadow_db
+        self.jam_rise_db = jam_rise_db
         self.d_stability_frac = d_stability_frac
         self.max_accumulated_offset = max_accumulated_offset
 
@@ -212,10 +224,68 @@ class InterventionEngine:
         })
         return record
 
+    def _attribute_null_result(self, record) -> None:
+        """
+        What does it mean when climbing made no difference?
+
+        Only that terrain is excluded IF the climb could have helped. A null
+        result from an experiment that was never capable of detecting the
+        effect is not evidence of absence — and against deep terrain shadow a
+        single aircraft climbing 60 m buys back a few dB of a 30 dB ridge loss,
+        so the test is underpowered exactly where terrain matters most.
+
+        So before concluding, weigh the two pieces of evidence the swarm has
+        without any experiment at all:
+          - the terrain loss its elevation map predicts on this link, and
+          - how far its receivers' measured noise floor sits above thermal.
+        Interference raises the noise floor; terrain does not. Terrain costs
+        signal on the path; interference does not.
+        """
+        shadow = (float(np.median(record.obstruction_samples))
+                  if record.obstruction_samples else None)
+        rise = (float(np.median(record.j_samples)) - self.thermal_floor_dbm
+                if record.j_samples else 0.0)
+        interfered = rise >= self.jam_rise_db
+        shadowed = shadow is not None and shadow >= self.deep_shadow_db
+
+        if shadowed and not interfered:
+            record.attribution = "terrain_shadow"
+            record.confidence = float(min(0.95, 0.55 + shadow / 60.0))
+            record.recommendation = (
+                f"Terrain shadow: the map predicts {shadow:.0f} dB of ridge loss on this "
+                f"link and the receivers show no interference ({rise:+.0f} dB over thermal). "
+                "The climb was too small to clear it, so altitude is not the fix — "
+                "requesting relay repositioning from the GNN."
+            )
+        elif shadowed and interfered:
+            record.attribution = "partial_terrain"
+            record.confidence = 0.5
+            record.recommendation = (
+                f"Two causes: {shadow:.0f} dB of predicted ridge loss AND the noise floor "
+                f"{rise:.0f} dB above thermal. Repositioning relays and flagging interference."
+            )
+        elif interfered:
+            record.attribution = "not_terrain"
+            record.confidence = float(min(0.95, 0.6 + rise / 80.0))
+            record.recommendation = (
+                f"Not terrain: climbing had no effect, the map predicts only "
+                f"{0.0 if shadow is None else shadow:.0f} dB of ridge loss, and the noise floor "
+                f"is {rise:.0f} dB above thermal. Hostile interference — triggering handover."
+            )
+        else:
+            record.attribution = "not_terrain"
+            record.confidence = 0.6
+            record.recommendation = (
+                "Altitude change produced no effect separable from channel noise "
+                f"(t = {record.effect_t_stat:.1f}), the map predicts little ridge loss and "
+                "there is no interference — consistent with a range limit."
+            )
+
     # -- per-tick driver ---------------------------------------------------
 
     def update(self, link_id: str, drone, loss: float, noise_dbm: float,
-               distance_m: float, sim_time: float) -> Optional[dict]:
+               distance_m: float, sim_time: float,
+               obstruction_db: Optional[float] = None) -> Optional[dict]:
         """
         Advance the intervention on `link_id` by one tick.
 
@@ -232,6 +302,8 @@ class InterventionEngine:
         # behaviour across the *whole* window to judge confounding.
         record.j_samples.append(noise_dbm)
         record.d_samples.append(distance_m)
+        if obstruction_db is not None:
+            record.obstruction_samples.append(float(obstruction_db))
 
         if record.phase == PRE:
             record.pre_loss_samples.append(loss)
@@ -397,13 +469,7 @@ class InterventionEngine:
                 "dominant cause — requesting relay repositioning from the GNN."
             )
         else:
-            record.attribution = "not_terrain"
-            record.confidence = 0.7
-            record.recommendation = (
-                "Altitude change produced no effect separable from channel noise "
-                f"(t = {record.effect_t_stat:.1f}), so terrain is excluded. "
-                "Consistent with jamming or range limits; triggering handover."
-            )
+            self._attribute_null_result(record)
 
         # --- act on the finding -------------------------------------------
         # Only a confirmed terrain effect justifies *keeping* the altitude.
