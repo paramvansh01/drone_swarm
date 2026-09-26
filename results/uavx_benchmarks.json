@@ -1,0 +1,1638 @@
+{
+  "generated_at": "2026-09-26 01:57",
+  "runs": 12,
+  "seeds": 3,
+  "scenarios": [
+    "synthetic_quickstart",
+    "kedarnath_landslide",
+    "uttarkashi_earthquake",
+    "stress_hidden_disturbances"
+  ],
+  "wall_clock_s": 484.9,
+  "aggregate": {
+    "completion_rate": {
+      "n": 12,
+      "mean": 0.984375,
+      "std": 0.027063293868263706
+    },
+    "priority_weighted_score": {
+      "n": 12,
+      "mean": 0.9802631578947368,
+      "std": 0.03418521330728048
+    },
+    "emergent_response_s": {
+      "n": 12,
+      "mean": 42.612432341234,
+      "std": 9.959182679588865
+    },
+    "packet_delivery_ratio": {
+      "n": 12,
+      "mean": 0.9672990647707218,
+      "std": 0.021063463387039662
+    },
+    "latency_ms_mean": {
+      "n": 12,
+      "mean": 9.065939877626784,
+      "std": 1.9020886599690146
+    },
+    "connectivity_availability": {
+      "n": 12,
+      "mean": 0.952617145123392,
+      "std": 0.03138071448958088
+    },
+    "downtime_s_total": {
+      "n": 12,
+      "mean": 123.55000000000001,
+      "std": 81.33242998132214
+    },
+    "relay_reallocations": {
+      "n": 12,
+      "mean": 7.666666666666667,
+      "std": 1.247219128924647
+    },
+    "reconfiguration_efficiency": {
+      "n": 12,
+      "mean": 1.0,
+      "std": 0.0
+    },
+    "recovery_time_s_mean": {
+      "n": 12,
+      "mean": 6.832870370368596,
+      "std": 5.070340615535896
+    },
+    "post_disruption_availability": {
+      "n": 12,
+      "mean": 0.9383324771149225,
+      "std": 0.039498204397041374
+    },
+    "post_disruption_pdr": {
+      "n": 12,
+      "mean": 0.9571924868972657,
+      "std": 0.0266933363134572
+    },
+    "collisions": {
+      "n": 12,
+      "mean": 0.0,
+      "std": 0.0
+    },
+    "min_separation_m": {
+      "n": 12,
+      "mean": 21.795,
+      "std": 7.352913821517743
+    },
+    "geofence_violations": {
+      "n": 12,
+      "mean": 0.0,
+      "std": 0.0
+    },
+    "battery_depleted": {
+      "n": 12,
+      "mean": 0.0,
+      "std": 0.0
+    },
+    "min_battery_pct": {
+      "n": 12,
+      "mean": 22.391666666666666,
+      "std": 5.317339299144096
+    }
+  },
+  "baseline_aggregate": {
+    "completion_rate": {
+      "n": 12,
+      "mean": 0.8729166666666667,
+      "std": 0.14987617059541414
+    },
+    "priority_weighted_score": {
+      "n": 12,
+      "mean": 0.83296783625731,
+      "std": 0.1889909713427287
+    },
+    "emergent_response_s": {
+      "n": 6,
+      "mean": 156.30565079352013,
+      "std": 36.47438890379564
+    },
+    "packet_delivery_ratio": {
+      "n": 12,
+      "mean": 0.9309577083675178,
+      "std": 0.047039581595650776
+    },
+    "latency_ms_mean": {
+      "n": 12,
+      "mean": 9.452377345216131,
+      "std": 2.2925123634998457
+    },
+    "connectivity_availability": {
+      "n": 12,
+      "mean": 0.9014848916638315,
+      "std": 0.06293216174858172
+    },
+    "downtime_s_total": {
+      "n": 12,
+      "mean": 215.54166666666666,
+      "std": 138.8436558287374
+    },
+    "relay_reallocations": {
+      "n": 12,
+      "mean": 7.0,
+      "std": 2.273030282830976
+    },
+    "reconfiguration_efficiency": {
+      "n": 12,
+      "mean": 1.0,
+      "std": 0.0
+    },
+    "recovery_time_s_mean": {
+      "n": 12,
+      "mean": 10.813749999996581,
+      "std": 7.122240441430908
+    },
+    "post_disruption_availability": {
+      "n": 12,
+      "mean": 0.8621377250191792,
+      "std": 0.08541684578061441
+    },
+    "post_disruption_pdr": {
+      "n": 12,
+      "mean": 0.9032117816347989,
+      "std": 0.06431286636037963
+    },
+    "collisions": {
+      "n": 12,
+      "mean": 0.0,
+      "std": 0.0
+    },
+    "min_separation_m": {
+      "n": 12,
+      "mean": 18.930833333333332,
+      "std": 7.45221271204436
+    },
+    "geofence_violations": {
+      "n": 12,
+      "mean": 0.0,
+      "std": 0.0
+    },
+    "battery_depleted": {
+      "n": 12,
+      "mean": 0.0,
+      "std": 0.0
+    },
+    "min_battery_pct": {
+      "n": 12,
+      "mean": 34.016666666666666,
+      "std": 11.228077405425305
+    }
+  },
+  "per_scenario": {
+    "synthetic_quickstart": {
+      "adaptive": {
+        "completion_rate": {
+          "n": 3,
+          "mean": 1.0,
+          "std": 0.0
+        },
+        "priority_weighted_score": {
+          "n": 3,
+          "mean": 1.0,
+          "std": 0.0
+        },
+        "emergent_response_s": {
+          "n": 3,
+          "mean": 32.3111999999706,
+          "std": 0.0
+        },
+        "packet_delivery_ratio": {
+          "n": 3,
+          "mean": 0.9560121853483153,
+          "std": 0.000804272615413381
+        },
+        "latency_ms_mean": {
+          "n": 3,
+          "mean": 7.776660328776212,
+          "std": 0.05480376680550223
+        },
+        "connectivity_availability": {
+          "n": 3,
+          "mean": 0.9418500949144798,
+          "std": 0.0009854647063776293
+        },
+        "downtime_s_total": {
+          "n": 3,
+          "mean": 125.53333333333332,
+          "std": 1.8696404883173512
+        },
+        "relay_reallocations": {
+          "n": 3,
+          "mean": 9.0,
+          "std": 0.0
+        },
+        "reconfiguration_efficiency": {
+          "n": 3,
+          "mean": 1.0,
+          "std": 0.0
+        },
+        "recovery_time_s_mean": {
+          "n": 3,
+          "mean": 5.305555555558365,
+          "std": 0.07494854201799396
+        },
+        "post_disruption_availability": {
+          "n": 3,
+          "mean": 0.92158368032317,
+          "std": 0.0013904887528868345
+        },
+        "post_disruption_pdr": {
+          "n": 3,
+          "mean": 0.9402705755636135,
+          "std": 0.0011283240392399865
+        },
+        "collisions": {
+          "n": 3,
+          "mean": 0.0,
+          "std": 0.0
+        },
+        "min_separation_m": {
+          "n": 3,
+          "mean": 19.02,
+          "std": 0.0
+        },
+        "geofence_violations": {
+          "n": 3,
+          "mean": 0.0,
+          "std": 0.0
+        },
+        "battery_depleted": {
+          "n": 3,
+          "mean": 0.0,
+          "std": 0.0
+        },
+        "min_battery_pct": {
+          "n": 3,
+          "mean": 25.2,
+          "std": 0.14142135623730984
+        }
+      },
+      "static": {
+        "completion_rate": {
+          "n": 3,
+          "mean": 0.8888888888888888,
+          "std": 0.0
+        },
+        "priority_weighted_score": {
+          "n": 3,
+          "mean": 0.8333333333333334,
+          "std": 0.0
+        },
+        "emergent_response_s": {
+          "n": 0,
+          "mean": null,
+          "std": null
+        },
+        "packet_delivery_ratio": {
+          "n": 3,
+          "mean": 0.8811302950957481,
+          "std": 0.001302339425631656
+        },
+        "latency_ms_mean": {
+          "n": 3,
+          "mean": 8.08865822426121,
+          "std": 0.058639870876923156
+        },
+        "connectivity_availability": {
+          "n": 3,
+          "mean": 0.8450681109469627,
+          "std": 0.00033724022118115514
+        },
+        "downtime_s_total": {
+          "n": 3,
+          "mean": 283.2,
+          "std": 0.6164414002968964
+        },
+        "relay_reallocations": {
+          "n": 3,
+          "mean": 5.0,
+          "std": 0.0
+        },
+        "reconfiguration_efficiency": {
+          "n": 3,
+          "mean": 1.0,
+          "std": 0.0
+        },
+        "recovery_time_s_mean": {
+          "n": 3,
+          "mean": 11.141666666669174,
+          "std": 0.13591255358570176
+        },
+        "post_disruption_availability": {
+          "n": 3,
+          "mean": 0.7768582013084259,
+          "std": 0.0004858842912405621
+        },
+        "post_disruption_pdr": {
+          "n": 3,
+          "mean": 0.8275108292781196,
+          "std": 0.0019029765709636314
+        },
+        "collisions": {
+          "n": 3,
+          "mean": 0.0,
+          "std": 0.0
+        },
+        "min_separation_m": {
+          "n": 3,
+          "mean": 31.56,
+          "std": 0.0
+        },
+        "geofence_violations": {
+          "n": 3,
+          "mean": 0.0,
+          "std": 0.0
+        },
+        "battery_depleted": {
+          "n": 3,
+          "mean": 0.0,
+          "std": 0.0
+        },
+        "min_battery_pct": {
+          "n": 3,
+          "mean": 42.9,
+          "std": 0.0
+        }
+      }
+    },
+    "kedarnath_landslide": {
+      "adaptive": {
+        "completion_rate": {
+          "n": 3,
+          "mean": 0.9375,
+          "std": 0.0
+        },
+        "priority_weighted_score": {
+          "n": 3,
+          "mean": 0.9210526315789473,
+          "std": 0.0
+        },
+        "emergent_response_s": {
+          "n": 3,
+          "mean": 52.2111999999525,
+          "std": 0.0
+        },
+        "packet_delivery_ratio": {
+          "n": 3,
+          "mean": 0.9702270498924449,
+          "std": 0.00022731217871964585
+        },
+        "latency_ms_mean": {
+          "n": 3,
+          "mean": 10.369882745288638,
+          "std": 0.1303115540879132
+        },
+        "connectivity_availability": {
+          "n": 3,
+          "mean": 0.955297661670413,
+          "std": 6.544502688355175e-05
+        },
+        "downtime_s_total": {
+          "n": 3,
+          "mean": 141.63333333333335,
+          "std": 0.16996731711975913
+        },
+        "relay_reallocations": {
+          "n": 3,
+          "mean": 7.0,
+          "std": 0.0
+        },
+        "reconfiguration_efficiency": {
+          "n": 3,
+          "mean": 1.0,
+          "std": 0.0
+        },
+        "recovery_time_s_mean": {
+          "n": 3,
+          "mean": 8.866666666662598,
+          "std": 0.040963453652546694
+        },
+        "post_disruption_availability": {
+          "n": 3,
+          "mean": 0.9392447362073666,
+          "std": 9.61833184803994e-05
+        },
+        "post_disruption_pdr": {
+          "n": 3,
+          "mean": 0.959397135460032,
+          "std": 0.000308655924451124
+        },
+        "collisions": {
+          "n": 3,
+          "mean": 0.0,
+          "std": 0.0
+        },
+        "min_separation_m": {
+          "n": 3,
+          "mean": 32.06666666666666,
+          "std": 1.2181497809747717
+        },
+        "geofence_violations": {
+          "n": 3,
+          "mean": 0.0,
+          "std": 0.0
+        },
+        "battery_depleted": {
+          "n": 3,
+          "mean": 0.0,
+          "std": 0.0
+        },
+        "min_battery_pct": {
+          "n": 3,
+          "mean": 13.533333333333333,
+          "std": 0.18856180831641287
+        }
+      },
+      "static": {
+        "completion_rate": {
+          "n": 3,
+          "mean": 0.625,
+          "std": 0.0
+        },
+        "priority_weighted_score": {
+          "n": 3,
+          "mean": 0.5263157894736842,
+          "std": 0.0
+        },
+        "emergent_response_s": {
+          "n": 0,
+          "mean": null,
+          "std": null
+        },
+        "packet_delivery_ratio": {
+          "n": 3,
+          "mean": 0.9482212842586542,
+          "std": 0.0003322835332637415
+        },
+        "latency_ms_mean": {
+          "n": 3,
+          "mean": 11.644764543805811,
+          "std": 0.18302951141465493
+        },
+        "connectivity_availability": {
+          "n": 3,
+          "mean": 0.911589111988074,
+          "std": 0.00039163933631549514
+        },
+        "downtime_s_total": {
+          "n": 3,
+          "mean": 203.86666666666667,
+          "std": 0.9030811456096115
+        },
+        "relay_reallocations": {
+          "n": 3,
+          "mean": 6.0,
+          "std": 0.0
+        },
+        "reconfiguration_efficiency": {
+          "n": 3,
+          "mean": 1.0,
+          "std": 0.0
+        },
+        "recovery_time_s_mean": {
+          "n": 3,
+          "mean": 12.413333333327637,
+          "std": 0.05734883511356535
+        },
+        "post_disruption_availability": {
+          "n": 3,
+          "mean": 0.8611092177311249,
+          "std": 0.000615555276129507
+        },
+        "post_disruption_pdr": {
+          "n": 3,
+          "mean": 0.918160553069386,
+          "std": 0.0005462122973728742
+        },
+        "collisions": {
+          "n": 3,
+          "mean": 0.0,
+          "std": 0.0
+        },
+        "min_separation_m": {
+          "n": 3,
+          "mean": 14.229999999999999,
+          "std": 1.7763568394002505e-15
+        },
+        "geofence_violations": {
+          "n": 3,
+          "mean": 0.0,
+          "std": 0.0
+        },
+        "battery_depleted": {
+          "n": 3,
+          "mean": 0.0,
+          "std": 0.0
+        },
+        "min_battery_pct": {
+          "n": 3,
+          "mean": 39.5,
+          "std": 0.0
+        }
+      }
+    },
+    "uttarkashi_earthquake": {
+      "adaptive": {
+        "completion_rate": {
+          "n": 3,
+          "mean": 1.0,
+          "std": 0.0
+        },
+        "priority_weighted_score": {
+          "n": 3,
+          "mean": 1.0,
+          "std": 0.0
+        },
+        "emergent_response_s": {
+          "n": 3,
+          "mean": 34.97407222219366,
+          "std": 0.0005741875634516826
+        },
+        "packet_delivery_ratio": {
+          "n": 3,
+          "mean": 0.9994970177417057,
+          "std": 0.00010122357114269263
+        },
+        "latency_ms_mean": {
+          "n": 3,
+          "mean": 6.709228043742455,
+          "std": 0.05207451727776503
+        },
+        "connectivity_availability": {
+          "n": 3,
+          "mean": 0.9999551287585474,
+          "std": 3.1306126288802405e-08
+        },
+        "downtime_s_total": {
+          "n": 3,
+          "mean": 0.10000000000000002,
+          "std": 1.3877787807814457e-17
+        },
+        "relay_reallocations": {
+          "n": 3,
+          "mean": 6.0,
+          "std": 0.0
+        },
+        "reconfiguration_efficiency": {
+          "n": 3,
+          "mean": 1.0,
+          "std": 0.0
+        },
+        "recovery_time_s_mean": {
+          "n": 3,
+          "mean": 0.0,
+          "std": 0.0
+        },
+        "post_disruption_availability": {
+          "n": 3,
+          "mean": 1.0,
+          "std": 0.0
+        },
+        "post_disruption_pdr": {
+          "n": 3,
+          "mean": 0.999173915062864,
+          "std": 0.00016598301477260553
+        },
+        "collisions": {
+          "n": 3,
+          "mean": 0.0,
+          "std": 0.0
+        },
+        "min_separation_m": {
+          "n": 3,
+          "mean": 14.97,
+          "std": 0.0
+        },
+        "geofence_violations": {
+          "n": 3,
+          "mean": 0.0,
+          "std": 0.0
+        },
+        "battery_depleted": {
+          "n": 3,
+          "mean": 0.0,
+          "std": 0.0
+        },
+        "min_battery_pct": {
+          "n": 3,
+          "mean": 27.400000000000002,
+          "std": 0.08164965809277232
+        }
+      },
+      "static": {
+        "completion_rate": {
+          "n": 3,
+          "mean": 0.9777777777777779,
+          "std": 0.03142696805273544
+        },
+        "priority_weighted_score": {
+          "n": 3,
+          "mean": 0.9722222222222222,
+          "std": 0.039283710065919325
+        },
+        "emergent_response_s": {
+          "n": 3,
+          "mean": 185.57671111095183,
+          "std": 29.63405952530078
+        },
+        "packet_delivery_ratio": {
+          "n": 3,
+          "mean": 0.9994679435385058,
+          "std": 0.0001882229618927558
+        },
+        "latency_ms_mean": {
+          "n": 3,
+          "mean": 6.42466105541606,
+          "std": 0.06895617924377226
+        },
+        "connectivity_availability": {
+          "n": 3,
+          "mean": 0.9999586411295445,
+          "std": 6.326591056761365e-08
+        },
+        "downtime_s_total": {
+          "n": 3,
+          "mean": 0.10000000000000002,
+          "std": 1.3877787807814457e-17
+        },
+        "relay_reallocations": {
+          "n": 3,
+          "mean": 6.333333333333333,
+          "std": 0.4714045207910317
+        },
+        "reconfiguration_efficiency": {
+          "n": 3,
+          "mean": 1.0,
+          "std": 0.0
+        },
+        "recovery_time_s_mean": {
+          "n": 3,
+          "mean": 0.0,
+          "std": 0.0
+        },
+        "post_disruption_availability": {
+          "n": 3,
+          "mean": 1.0,
+          "std": 0.0
+        },
+        "post_disruption_pdr": {
+          "n": 3,
+          "mean": 0.9991628732101203,
+          "std": 0.0002963871157628155
+        },
+        "collisions": {
+          "n": 3,
+          "mean": 0.0,
+          "std": 0.0
+        },
+        "min_separation_m": {
+          "n": 3,
+          "mean": 15.103333333333333,
+          "std": 2.903851848072755
+        },
+        "geofence_violations": {
+          "n": 3,
+          "mean": 0.0,
+          "std": 0.0
+        },
+        "battery_depleted": {
+          "n": 3,
+          "mean": 0.0,
+          "std": 0.0
+        },
+        "min_battery_pct": {
+          "n": 3,
+          "mean": 14.766666666666666,
+          "std": 0.04714045207910384
+        }
+      }
+    },
+    "stress_hidden_disturbances": {
+      "adaptive": {
+        "completion_rate": {
+          "n": 3,
+          "mean": 1.0,
+          "std": 0.0
+        },
+        "priority_weighted_score": {
+          "n": 3,
+          "mean": 1.0,
+          "std": 0.0
+        },
+        "emergent_response_s": {
+          "n": 3,
+          "mean": 50.95325714281923,
+          "std": 8.40093127327938
+        },
+        "packet_delivery_ratio": {
+          "n": 3,
+          "mean": 0.9434600061004211,
+          "std": 0.0057440012338161985
+        },
+        "latency_ms_mean": {
+          "n": 3,
+          "mean": 11.407988392699833,
+          "std": 0.21743527786314915
+        },
+        "connectivity_availability": {
+          "n": 3,
+          "mean": 0.9133656951501274,
+          "std": 0.005774598250986403
+        },
+        "downtime_s_total": {
+          "n": 3,
+          "mean": 226.9333333333333,
+          "std": 14.0490410902508
+        },
+        "relay_reallocations": {
+          "n": 3,
+          "mean": 8.666666666666666,
+          "std": 0.4714045207910317
+        },
+        "reconfiguration_efficiency": {
+          "n": 3,
+          "mean": 1.0,
+          "std": 0.0
+        },
+        "recovery_time_s_mean": {
+          "n": 3,
+          "mean": 13.159259259253423,
+          "std": 3.105767015038551
+        },
+        "post_disruption_availability": {
+          "n": 3,
+          "mean": 0.8925014919291532,
+          "std": 0.007333000726595219
+        },
+        "post_disruption_pdr": {
+          "n": 3,
+          "mean": 0.9299283215025532,
+          "std": 0.007194045887544089
+        },
+        "collisions": {
+          "n": 3,
+          "mean": 0.0,
+          "std": 0.0
+        },
+        "min_separation_m": {
+          "n": 3,
+          "mean": 21.12333333333333,
+          "std": 7.384981757293349
+        },
+        "geofence_violations": {
+          "n": 3,
+          "mean": 0.0,
+          "std": 0.0
+        },
+        "battery_depleted": {
+          "n": 3,
+          "mean": 0.0,
+          "std": 0.0
+        },
+        "min_battery_pct": {
+          "n": 3,
+          "mean": 23.433333333333334,
+          "std": 0.7133644853010895
+        }
+      },
+      "static": {
+        "completion_rate": {
+          "n": 3,
+          "mean": 1.0,
+          "std": 0.0
+        },
+        "priority_weighted_score": {
+          "n": 3,
+          "mean": 1.0,
+          "std": 0.0
+        },
+        "emergent_response_s": {
+          "n": 3,
+          "mean": 127.03459047608844,
+          "std": 8.306302646071963
+        },
+        "packet_delivery_ratio": {
+          "n": 3,
+          "mean": 0.895011310577163,
+          "std": 0.009080144017298493
+        },
+        "latency_ms_mean": {
+          "n": 3,
+          "mean": 11.651425557381444,
+          "std": 0.5582006052409875
+        },
+        "connectivity_availability": {
+          "n": 3,
+          "mean": 0.8493237025907449,
+          "std": 0.011778939803211711
+        },
+        "downtime_s_total": {
+          "n": 3,
+          "mean": 375.0,
+          "std": 23.51637727202045
+        },
+        "relay_reallocations": {
+          "n": 3,
+          "mean": 10.666666666666666,
+          "std": 1.247219128924647
+        },
+        "reconfiguration_efficiency": {
+          "n": 3,
+          "mean": 1.0,
+          "std": 0.0
+        },
+        "recovery_time_s_mean": {
+          "n": 3,
+          "mean": 19.699999999989515,
+          "std": 2.077173609920964
+        },
+        "post_disruption_availability": {
+          "n": 3,
+          "mean": 0.8105834810371658,
+          "std": 0.01568544719081059
+        },
+        "post_disruption_pdr": {
+          "n": 3,
+          "mean": 0.8680128709815692,
+          "std": 0.01186997742815237
+        },
+        "collisions": {
+          "n": 3,
+          "mean": 0.0,
+          "std": 0.0
+        },
+        "min_separation_m": {
+          "n": 3,
+          "mean": 14.83,
+          "std": 0.8057708524553776
+        },
+        "geofence_violations": {
+          "n": 3,
+          "mean": 0.0,
+          "std": 0.0
+        },
+        "battery_depleted": {
+          "n": 3,
+          "mean": 0.0,
+          "std": 0.0
+        },
+        "min_battery_pct": {
+          "n": 3,
+          "mean": 38.9,
+          "std": 0.9416297927883707
+        }
+      }
+    }
+  },
+  "rows": [
+    {
+      "scenario": "synthetic_quickstart",
+      "seed": 1,
+      "strategy": "adaptive",
+      "wall_s": 99.8,
+      "scores": {
+        "mission_completion": 100.0,
+        "communication_resilience": 94.8,
+        "relay_role_management": 100.0,
+        "fault_recovery": 83.3,
+        "safety": 100.0,
+        "weighted_95pct_of_rubric": 96.0
+      },
+      "completion_rate": 1.0,
+      "priority_weighted_score": 1.0,
+      "emergent_response_s": 32.3111999999706,
+      "packet_delivery_ratio": 0.954875283446712,
+      "latency_ms_mean": 7.704265171823802,
+      "connectivity_availability": 0.9404656783008699,
+      "downtime_s_total": 128.1,
+      "relay_reallocations": 9,
+      "reconfiguration_efficiency": 1.0,
+      "recovery_time_s_mean": 5.350000000002832,
+      "post_disruption_availability": 0.9196232339089482,
+      "post_disruption_pdr": 0.9386748844375963,
+      "collisions": 0,
+      "min_separation_m": 19.02,
+      "geofence_violations": 0,
+      "battery_depleted": 0,
+      "min_battery_pct": 25.0
+    },
+    {
+      "scenario": "synthetic_quickstart",
+      "seed": 1,
+      "strategy": "static",
+      "wall_s": 72.8,
+      "scores": {
+        "mission_completion": 70.8,
+        "communication_resilience": 86.4,
+        "relay_role_management": 90.1,
+        "fault_recovery": 75.0,
+        "safety": 100.0,
+        "weighted_95pct_of_rubric": 82.7
+      },
+      "completion_rate": 0.8888888888888888,
+      "priority_weighted_score": 0.8333333333333334,
+      "emergent_response_s": null,
+      "packet_delivery_ratio": 0.8818981604905358,
+      "latency_ms_mean": 8.00719178082539,
+      "connectivity_availability": 0.8454510640625599,
+      "downtime_s_total": 282.5,
+      "relay_reallocations": 5,
+      "reconfiguration_efficiency": 1.0,
+      "recovery_time_s_mean": 11.10000000000251,
+      "post_disruption_availability": 0.7774099471900371,
+      "post_disruption_pdr": 0.828692962103635,
+      "collisions": 0,
+      "min_separation_m": 31.56,
+      "geofence_violations": 0,
+      "battery_depleted": 0,
+      "min_battery_pct": 42.9
+    },
+    {
+      "scenario": "synthetic_quickstart",
+      "seed": 2,
+      "strategy": "adaptive",
+      "wall_s": 101.3,
+      "scores": {
+        "mission_completion": 100.0,
+        "communication_resilience": 94.9,
+        "relay_role_management": 100.0,
+        "fault_recovery": 83.3,
+        "safety": 100.0,
+        "weighted_95pct_of_rubric": 96.0
+      },
+      "completion_rate": 1.0,
+      "priority_weighted_score": 1.0,
+      "emergent_response_s": 32.3111999999706,
+      "packet_delivery_ratio": 0.9565511031067087,
+      "latency_ms_mean": 7.788891572082332,
+      "connectivity_availability": 0.9424035443972597,
+      "downtime_s_total": 124.8,
+      "relay_reallocations": 9,
+      "reconfiguration_efficiency": 1.0,
+      "recovery_time_s_mean": 5.366666666669507,
+      "post_disruption_availability": 0.9224309529733765,
+      "post_disruption_pdr": 0.9410687022900763,
+      "collisions": 0,
+      "min_separation_m": 19.02,
+      "geofence_violations": 0,
+      "battery_depleted": 0,
+      "min_battery_pct": 25.3
+    },
+    {
+      "scenario": "synthetic_quickstart",
+      "seed": 2,
+      "strategy": "static",
+      "wall_s": 72.3,
+      "scores": {
+        "mission_completion": 70.8,
+        "communication_resilience": 86.3,
+        "relay_role_management": 88.3,
+        "fault_recovery": 75.0,
+        "safety": 100.0,
+        "weighted_95pct_of_rubric": 82.3
+      },
+      "completion_rate": 0.8888888888888888,
+      "priority_weighted_score": 0.8333333333333334,
+      "emergent_response_s": null,
+      "packet_delivery_ratio": 0.8821961620469083,
+      "latency_ms_mean": 8.115961418796262,
+      "connectivity_availability": 0.844630450243423,
+      "downtime_s_total": 284.0,
+      "relay_reallocations": 5,
+      "reconfiguration_efficiency": 1.0,
+      "recovery_time_s_mean": 11.32500000000234,
+      "post_disruption_availability": 0.7762276345865847,
+      "post_disruption_pdr": 0.8290135396518375,
+      "collisions": 0,
+      "min_separation_m": 31.56,
+      "geofence_violations": 0,
+      "battery_depleted": 0,
+      "min_battery_pct": 42.9
+    },
+    {
+      "scenario": "synthetic_quickstart",
+      "seed": 3,
+      "strategy": "adaptive",
+      "wall_s": 100.5,
+      "scores": {
+        "mission_completion": 100.0,
+        "communication_resilience": 95.0,
+        "relay_role_management": 100.0,
+        "fault_recovery": 83.3,
+        "safety": 100.0,
+        "weighted_95pct_of_rubric": 96.0
+      },
+      "completion_rate": 1.0,
+      "priority_weighted_score": 1.0,
+      "emergent_response_s": 32.3111999999706,
+      "packet_delivery_ratio": 0.9566101694915254,
+      "latency_ms_mean": 7.8368242424225,
+      "connectivity_availability": 0.9426810620453095,
+      "downtime_s_total": 123.7,
+      "relay_reallocations": 9,
+      "reconfiguration_efficiency": 1.0,
+      "recovery_time_s_mean": 5.200000000002755,
+      "post_disruption_availability": 0.9226968540871849,
+      "post_disruption_pdr": 0.9410681399631676,
+      "collisions": 0,
+      "min_separation_m": 19.02,
+      "geofence_violations": 0,
+      "battery_depleted": 0,
+      "min_battery_pct": 25.3
+    },
+    {
+      "scenario": "synthetic_quickstart",
+      "seed": 3,
+      "strategy": "static",
+      "wall_s": 72.3,
+      "scores": {
+        "mission_completion": 70.8,
+        "communication_resilience": 86.2,
+        "relay_role_management": 90.9,
+        "fault_recovery": 75.0,
+        "safety": 100.0,
+        "weighted_95pct_of_rubric": 82.8
+      },
+      "completion_rate": 0.8888888888888888,
+      "priority_weighted_score": 0.8333333333333334,
+      "emergent_response_s": null,
+      "packet_delivery_ratio": 0.8792965627498002,
+      "latency_ms_mean": 8.142821473161975,
+      "connectivity_availability": 0.8451228185349051,
+      "downtime_s_total": 283.1,
+      "relay_reallocations": 5,
+      "reconfiguration_efficiency": 1.0,
+      "recovery_time_s_mean": 11.000000000002672,
+      "post_disruption_availability": 0.7769370221486561,
+      "post_disruption_pdr": 0.8248259860788864,
+      "collisions": 0,
+      "min_separation_m": 31.56,
+      "geofence_violations": 0,
+      "battery_depleted": 0,
+      "min_battery_pct": 42.9
+    },
+    {
+      "scenario": "kedarnath_landslide",
+      "seed": 1,
+      "strategy": "adaptive",
+      "wall_s": 161.4,
+      "scores": {
+        "mission_completion": 78.3,
+        "communication_resilience": 96.3,
+        "relay_role_management": 100.0,
+        "fault_recovery": 85.7,
+        "safety": 100.0,
+        "weighted_95pct_of_rubric": 91.0
+      },
+      "completion_rate": 0.9375,
+      "priority_weighted_score": 0.9210526315789473,
+      "emergent_response_s": 52.2111999999525,
+      "packet_delivery_ratio": 0.9700460829493087,
+      "latency_ms_mean": 10.185607171957786,
+      "connectivity_availability": 0.9552474497046973,
+      "downtime_s_total": 141.7,
+      "relay_reallocations": 7,
+      "reconfiguration_efficiency": 1.0,
+      "recovery_time_s_mean": 8.914285714281602,
+      "post_disruption_availability": 0.9391621911922664,
+      "post_disruption_pdr": 0.9591537494763301,
+      "collisions": 0,
+      "min_separation_m": 32.8,
+      "geofence_violations": 0,
+      "battery_depleted": 0,
+      "min_battery_pct": 13.8
+    },
+    {
+      "scenario": "kedarnath_landslide",
+      "seed": 1,
+      "strategy": "static",
+      "wall_s": 108.6,
+      "scores": {
+        "mission_completion": 44.7,
+        "communication_resilience": 93.0,
+        "relay_role_management": 80.1,
+        "fault_recovery": 80.0,
+        "safety": 100.0,
+        "weighted_95pct_of_rubric": 76.3
+      },
+      "completion_rate": 0.625,
+      "priority_weighted_score": 0.5263157894736842,
+      "emergent_response_s": null,
+      "packet_delivery_ratio": 0.948614929160499,
+      "latency_ms_mean": 11.386028401288716,
+      "connectivity_availability": 0.9115312893013428,
+      "downtime_s_total": 204.0,
+      "relay_reallocations": 6,
+      "reconfiguration_efficiency": 1.0,
+      "recovery_time_s_mean": 12.479999999994243,
+      "post_disruption_availability": 0.8610183354917865,
+      "post_disruption_pdr": 0.9188105579685933,
+      "collisions": 0,
+      "min_separation_m": 14.23,
+      "geofence_violations": 0,
+      "battery_depleted": 0,
+      "min_battery_pct": 39.5
+    },
+    {
+      "scenario": "kedarnath_landslide",
+      "seed": 2,
+      "strategy": "adaptive",
+      "wall_s": 161.2,
+      "scores": {
+        "mission_completion": 78.3,
+        "communication_resilience": 96.3,
+        "relay_role_management": 100.0,
+        "fault_recovery": 85.7,
+        "safety": 100.0,
+        "weighted_95pct_of_rubric": 91.1
+      },
+      "completion_rate": 0.9375,
+      "priority_weighted_score": 0.9210526315789473,
+      "emergent_response_s": 52.2111999999525,
+      "packet_delivery_ratio": 0.970547630004602,
+      "latency_ms_mean": 10.463901089956288,
+      "connectivity_availability": 0.9553901000094593,
+      "downtime_s_total": 141.4,
+      "relay_reallocations": 7,
+      "reconfiguration_efficiency": 1.0,
+      "recovery_time_s_mean": 8.871428571424499,
+      "post_disruption_availability": 0.9393796387661418,
+      "post_disruption_pdr": 0.9598326359832636,
+      "collisions": 0,
+      "min_separation_m": 33.05,
+      "geofence_violations": 0,
+      "battery_depleted": 0,
+      "min_battery_pct": 13.4
+    },
+    {
+      "scenario": "kedarnath_landslide",
+      "seed": 2,
+      "strategy": "static",
+      "wall_s": 108.7,
+      "scores": {
+        "mission_completion": 44.7,
+        "communication_resilience": 93.0,
+        "relay_role_management": 80.5,
+        "fault_recovery": 80.0,
+        "safety": 100.0,
+        "weighted_95pct_of_rubric": 76.4
+      },
+      "completion_rate": 0.625,
+      "priority_weighted_score": 0.5263157894736842,
+      "emergent_response_s": null,
+      "packet_delivery_ratio": 0.9478021978021978,
+      "latency_ms_mean": 11.767697594507998,
+      "connectivity_availability": 0.9120950604969716,
+      "downtime_s_total": 202.7,
+      "relay_reallocations": 6,
+      "reconfiguration_efficiency": 1.0,
+      "recovery_time_s_mean": 12.419999999994298,
+      "post_disruption_availability": 0.8619044373253357,
+      "post_disruption_pdr": 0.9174741062479118,
+      "collisions": 0,
+      "min_separation_m": 14.23,
+      "geofence_violations": 0,
+      "battery_depleted": 0,
+      "min_battery_pct": 39.5
+    },
+    {
+      "scenario": "kedarnath_landslide",
+      "seed": 3,
+      "strategy": "adaptive",
+      "wall_s": 165.3,
+      "scores": {
+        "mission_completion": 78.3,
+        "communication_resilience": 96.3,
+        "relay_role_management": 100.0,
+        "fault_recovery": 85.7,
+        "safety": 100.0,
+        "weighted_95pct_of_rubric": 91.0
+      },
+      "completion_rate": 0.9375,
+      "priority_weighted_score": 0.9210526315789473,
+      "emergent_response_s": 52.2111999999525,
+      "packet_delivery_ratio": 0.9700874367234238,
+      "latency_ms_mean": 10.460139973951843,
+      "connectivity_availability": 0.955255435297082,
+      "downtime_s_total": 141.8,
+      "relay_reallocations": 7,
+      "reconfiguration_efficiency": 1.0,
+      "recovery_time_s_mean": 8.814285714281693,
+      "post_disruption_availability": 0.9391923786636913,
+      "post_disruption_pdr": 0.9592050209205021,
+      "collisions": 0,
+      "min_separation_m": 30.35,
+      "geofence_violations": 0,
+      "battery_depleted": 0,
+      "min_battery_pct": 13.4
+    },
+    {
+      "scenario": "kedarnath_landslide",
+      "seed": 3,
+      "strategy": "static",
+      "wall_s": 108.4,
+      "scores": {
+        "mission_completion": 44.7,
+        "communication_resilience": 93.0,
+        "relay_role_management": 81.0,
+        "fault_recovery": 80.0,
+        "safety": 100.0,
+        "weighted_95pct_of_rubric": 76.5
+      },
+      "completion_rate": 0.625,
+      "priority_weighted_score": 0.5263157894736842,
+      "emergent_response_s": null,
+      "packet_delivery_ratio": 0.9482467258132657,
+      "latency_ms_mean": 11.78056763562072,
+      "connectivity_availability": 0.9111409861659076,
+      "downtime_s_total": 204.9,
+      "relay_reallocations": 6,
+      "reconfiguration_efficiency": 1.0,
+      "recovery_time_s_mean": 12.33999999999437,
+      "post_disruption_availability": 0.8604048803762525,
+      "post_disruption_pdr": 0.9181969949916527,
+      "collisions": 0,
+      "min_separation_m": 14.23,
+      "geofence_violations": 0,
+      "battery_depleted": 0,
+      "min_battery_pct": 39.5
+    },
+    {
+      "scenario": "uttarkashi_earthquake",
+      "seed": 1,
+      "strategy": "adaptive",
+      "wall_s": 115.5,
+      "scores": {
+        "mission_completion": 100.0,
+        "communication_resilience": 100.0,
+        "relay_role_management": 100.0,
+        "fault_recovery": 100.0,
+        "safety": 100.0,
+        "weighted_95pct_of_rubric": 100.0
+      },
+      "completion_rate": 1.0,
+      "priority_weighted_score": 1.0,
+      "emergent_response_s": 34.97328333330478,
+      "packet_delivery_ratio": 0.9995685005393743,
+      "latency_ms_mean": 6.643476308105656,
+      "connectivity_availability": 0.9999551066217733,
+      "downtime_s_total": 0.1,
+      "relay_reallocations": 6,
+      "reconfiguration_efficiency": 1.0,
+      "recovery_time_s_mean": 0.0,
+      "post_disruption_availability": 1.0,
+      "post_disruption_pdr": 0.9992912827781715,
+      "collisions": 0,
+      "min_separation_m": 14.97,
+      "geofence_violations": 0,
+      "battery_depleted": 0,
+      "min_battery_pct": 27.4
+    },
+    {
+      "scenario": "uttarkashi_earthquake",
+      "seed": 1,
+      "strategy": "static",
+      "wall_s": 128.9,
+      "scores": {
+        "mission_completion": 100.0,
+        "communication_resilience": 100.0,
+        "relay_role_management": 100.0,
+        "fault_recovery": 100.0,
+        "safety": 100.0,
+        "weighted_95pct_of_rubric": 100.0
+      },
+      "completion_rate": 1.0,
+      "priority_weighted_score": 1.0,
+      "emergent_response_s": 164.62226666652586,
+      "packet_delivery_ratio": 0.9996008780682498,
+      "latency_ms_mean": 6.333671567607817,
+      "connectivity_availability": 0.9999585989898154,
+      "downtime_s_total": 0.1,
+      "relay_reallocations": 6,
+      "reconfiguration_efficiency": 1.0,
+      "recovery_time_s_mean": 0.0,
+      "post_disruption_availability": 1.0,
+      "post_disruption_pdr": 0.9993722536095417,
+      "collisions": 0,
+      "min_separation_m": 13.05,
+      "geofence_violations": 0,
+      "battery_depleted": 0,
+      "min_battery_pct": 14.8
+    },
+    {
+      "scenario": "uttarkashi_earthquake",
+      "seed": 2,
+      "strategy": "adaptive",
+      "wall_s": 119.9,
+      "scores": {
+        "mission_completion": 100.0,
+        "communication_resilience": 100.0,
+        "relay_role_management": 100.0,
+        "fault_recovery": 100.0,
+        "safety": 100.0,
+        "weighted_95pct_of_rubric": 100.0
+      },
+      "completion_rate": 1.0,
+      "priority_weighted_score": 1.0,
+      "emergent_response_s": 34.97463333330477,
+      "packet_delivery_ratio": 0.9995686866508519,
+      "latency_ms_mean": 6.713378226710363,
+      "connectivity_availability": 0.9999551066217733,
+      "downtime_s_total": 0.1,
+      "relay_reallocations": 6,
+      "reconfiguration_efficiency": 1.0,
+      "recovery_time_s_mean": 0.0,
+      "post_disruption_availability": 1.0,
+      "post_disruption_pdr": 0.9992912827781715,
+      "collisions": 0,
+      "min_separation_m": 14.97,
+      "geofence_violations": 0,
+      "battery_depleted": 0,
+      "min_battery_pct": 27.3
+    },
+    {
+      "scenario": "uttarkashi_earthquake",
+      "seed": 2,
+      "strategy": "static",
+      "wall_s": 126.4,
+      "scores": {
+        "mission_completion": 100.0,
+        "communication_resilience": 100.0,
+        "relay_role_management": 100.0,
+        "fault_recovery": 100.0,
+        "safety": 100.0,
+        "weighted_95pct_of_rubric": 100.0
+      },
+      "completion_rate": 1.0,
+      "priority_weighted_score": 1.0,
+      "emergent_response_s": 164.62226666652586,
+      "packet_delivery_ratio": 0.9992017561364998,
+      "latency_ms_mean": 6.500538636829934,
+      "connectivity_availability": 0.9999585938470456,
+      "downtime_s_total": 0.1,
+      "relay_reallocations": 6,
+      "reconfiguration_efficiency": 1.0,
+      "recovery_time_s_mean": 0.0,
+      "post_disruption_availability": 1.0,
+      "post_disruption_pdr": 0.9987437185929648,
+      "collisions": 0,
+      "min_separation_m": 13.05,
+      "geofence_violations": 0,
+      "battery_depleted": 0,
+      "min_battery_pct": 14.8
+    },
+    {
+      "scenario": "uttarkashi_earthquake",
+      "seed": 3,
+      "strategy": "adaptive",
+      "wall_s": 117.1,
+      "scores": {
+        "mission_completion": 100.0,
+        "communication_resilience": 100.0,
+        "relay_role_management": 100.0,
+        "fault_recovery": 100.0,
+        "safety": 100.0,
+        "weighted_95pct_of_rubric": 100.0
+      },
+      "completion_rate": 1.0,
+      "priority_weighted_score": 1.0,
+      "emergent_response_s": 34.97429999997144,
+      "packet_delivery_ratio": 0.9993538660348912,
+      "latency_ms_mean": 6.770829596411346,
+      "connectivity_availability": 0.9999551730320959,
+      "downtime_s_total": 0.1,
+      "relay_reallocations": 6,
+      "reconfiguration_efficiency": 1.0,
+      "recovery_time_s_mean": 0.0,
+      "post_disruption_availability": 1.0,
+      "post_disruption_pdr": 0.998939179632249,
+      "collisions": 0,
+      "min_separation_m": 14.97,
+      "geofence_violations": 0,
+      "battery_depleted": 0,
+      "min_battery_pct": 27.5
+    },
+    {
+      "scenario": "uttarkashi_earthquake",
+      "seed": 3,
+      "strategy": "static",
+      "wall_s": 125.8,
+      "scores": {
+        "mission_completion": 77.9,
+        "communication_resilience": 100.0,
+        "relay_role_management": 100.0,
+        "fault_recovery": 100.0,
+        "safety": 100.0,
+        "weighted_95pct_of_rubric": 94.2
+      },
+      "completion_rate": 0.9333333333333333,
+      "priority_weighted_score": 0.9166666666666666,
+      "emergent_response_s": 227.4855999998038,
+      "packet_delivery_ratio": 0.9996011964107677,
+      "latency_ms_mean": 6.439772961810428,
+      "connectivity_availability": 0.9999587305517724,
+      "downtime_s_total": 0.1,
+      "relay_reallocations": 7,
+      "reconfiguration_efficiency": 1.0,
+      "recovery_time_s_mean": 0.0,
+      "post_disruption_availability": 1.0,
+      "post_disruption_pdr": 0.9993726474278545,
+      "collisions": 0,
+      "min_separation_m": 19.21,
+      "geofence_violations": 0,
+      "battery_depleted": 0,
+      "min_battery_pct": 14.7
+    },
+    {
+      "scenario": "stress_hidden_disturbances",
+      "seed": 1,
+      "strategy": "adaptive",
+      "wall_s": 144.5,
+      "scores": {
+        "mission_completion": 100.0,
+        "communication_resilience": 93.2,
+        "relay_role_management": 62.1,
+        "fault_recovery": 77.8,
+        "safety": 100.0,
+        "weighted_95pct_of_rubric": 86.7
+      },
+      "completion_rate": 1.0,
+      "priority_weighted_score": 1.0,
+      "emergent_response_s": 62.538971428522125,
+      "packet_delivery_ratio": 0.9470066919877013,
+      "latency_ms_mean": 11.60007911391225,
+      "connectivity_availability": 0.916560747663542,
+      "downtime_s_total": 223.2,
+      "relay_reallocations": 8,
+      "reconfiguration_efficiency": 1.0,
+      "recovery_time_s_mean": 16.111111111103398,
+      "post_disruption_availability": 0.896989565056792,
+      "post_disruption_pdr": 0.9345397676496873,
+      "collisions": 0,
+      "min_separation_m": 31.55,
+      "geofence_violations": 0,
+      "battery_depleted": 0,
+      "min_battery_pct": 22.7
+    },
+    {
+      "scenario": "stress_hidden_disturbances",
+      "seed": 1,
+      "strategy": "static",
+      "wall_s": 110.2,
+      "scores": {
+        "mission_completion": 100.0,
+        "communication_resilience": 87.4,
+        "relay_role_management": 59.5,
+        "fault_recovery": 77.8,
+        "safety": 100.0,
+        "weighted_95pct_of_rubric": 84.6
+      },
+      "completion_rate": 1.0,
+      "priority_weighted_score": 1.0,
+      "emergent_response_s": 137.52395714274937,
+      "packet_delivery_ratio": 0.891566265060241,
+      "latency_ms_mean": 12.392273924485787,
+      "connectivity_availability": 0.8557737260401888,
+      "downtime_s_total": 370.2,
+      "relay_reallocations": 9,
+      "reconfiguration_efficiency": 1.0,
+      "recovery_time_s_mean": 16.799999999992703,
+      "post_disruption_availability": 0.8201302488335925,
+      "post_disruption_pdr": 0.8647569852077952,
+      "collisions": 0,
+      "min_separation_m": 14.76,
+      "geofence_violations": 0,
+      "battery_depleted": 0,
+      "min_battery_pct": 37.8
+    },
+    {
+      "scenario": "stress_hidden_disturbances",
+      "seed": 2,
+      "strategy": "adaptive",
+      "wall_s": 136.5,
+      "scores": {
+        "mission_completion": 100.0,
+        "communication_resilience": 92.0,
+        "relay_role_management": 100.0,
+        "fault_recovery": 83.3,
+        "safety": 100.0,
+        "weighted_95pct_of_rubric": 95.3
+      },
+      "completion_rate": 1.0,
+      "priority_weighted_score": 1.0,
+      "emergent_response_s": 47.438971428536625,
+      "packet_delivery_ratio": 0.9353576751117735,
+      "latency_ms_mean": 11.519892584166255,
+      "connectivity_availability": 0.9052595048970354,
+      "downtime_s_total": 245.7,
+      "relay_reallocations": 9,
+      "reconfiguration_efficiency": 1.0,
+      "recovery_time_s_mean": 8.866666666663809,
+      "post_disruption_availability": 0.8821610210152576,
+      "post_disruption_pdr": 0.9197687861271676,
+      "collisions": 0,
+      "min_separation_m": 15.39,
+      "geofence_violations": 0,
+      "battery_depleted": 0,
+      "min_battery_pct": 23.2
+    },
+    {
+      "scenario": "stress_hidden_disturbances",
+      "seed": 2,
+      "strategy": "static",
+      "wall_s": 103.8,
+      "scores": {
+        "mission_completion": 100.0,
+        "communication_resilience": 88.3,
+        "relay_role_management": 48.2,
+        "fault_recovery": 55.6,
+        "safety": 100.0,
+        "weighted_95pct_of_rubric": 79.0
+      },
+      "completion_rate": 1.0,
+      "priority_weighted_score": 1.0,
+      "emergent_response_s": 117.21039999990187,
+      "packet_delivery_ratio": 0.9074470153606844,
+      "latency_ms_mean": 11.51709382660197,
+      "connectivity_availability": 0.8593995567197088,
+      "downtime_s_total": 348.9,
+      "relay_reallocations": 12,
+      "reconfiguration_efficiency": 1.0,
+      "recovery_time_s_mean": 20.74444444443232,
+      "post_disruption_availability": 0.8231506363129342,
+      "post_disruption_pdr": 0.8839024390243903,
+      "collisions": 0,
+      "min_separation_m": 13.88,
+      "geofence_violations": 0,
+      "battery_depleted": 0,
+      "min_battery_pct": 38.8
+    },
+    {
+      "scenario": "stress_hidden_disturbances",
+      "seed": 3,
+      "strategy": "adaptive",
+      "wall_s": 123.3,
+      "scores": {
+        "mission_completion": 100.0,
+        "communication_resilience": 93.3,
+        "relay_role_management": 69.0,
+        "fault_recovery": 80.0,
+        "safety": 100.0,
+        "weighted_95pct_of_rubric": 88.5
+      },
+      "completion_rate": 1.0,
+      "priority_weighted_score": 1.0,
+      "emergent_response_s": 42.881828571398955,
+      "packet_delivery_ratio": 0.9480156512017887,
+      "latency_ms_mean": 11.103993480020995,
+      "connectivity_availability": 0.918276832889805,
+      "downtime_s_total": 211.9,
+      "relay_reallocations": 9,
+      "reconfiguration_efficiency": 1.0,
+      "recovery_time_s_mean": 14.49999999999306,
+      "post_disruption_availability": 0.8983538897154101,
+      "post_disruption_pdr": 0.9354764107308048,
+      "collisions": 0,
+      "min_separation_m": 16.43,
+      "geofence_violations": 0,
+      "battery_depleted": 0,
+      "min_battery_pct": 24.4
+    },
+    {
+      "scenario": "stress_hidden_disturbances",
+      "seed": 3,
+      "strategy": "static",
+      "wall_s": 88.0,
+      "scores": {
+        "mission_completion": 100.0,
+        "communication_resilience": 85.9,
+        "relay_role_management": 46.4,
+        "fault_recovery": 55.6,
+        "safety": 100.0,
+        "weighted_95pct_of_rubric": 78.0
+      },
+      "completion_rate": 1.0,
+      "priority_weighted_score": 1.0,
+      "emergent_response_s": 126.36941428561408,
+      "packet_delivery_ratio": 0.886020651310564,
+      "latency_ms_mean": 11.044908921056575,
+      "connectivity_availability": 0.8327978250123371,
+      "downtime_s_total": 405.9,
+      "relay_reallocations": 11,
+      "reconfiguration_efficiency": 1.0,
+      "recovery_time_s_mean": 21.555555555543517,
+      "post_disruption_availability": 0.7884695579649708,
+      "post_disruption_pdr": 0.855379188712522,
+      "collisions": 0,
+      "min_separation_m": 15.85,
+      "geofence_violations": 0,
+      "battery_depleted": 0,
+      "min_battery_pct": 40.1
+    }
+  ]
+}

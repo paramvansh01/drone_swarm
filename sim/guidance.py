@@ -1,14 +1,20 @@
 """
-Guidance and mission planning for C-DAWN.
+Guidance and mission planning for the UAV-X swarm.
 
-This layer sits between the mission (survey these PoIs) and the flight
-controller (hold this setpoint). It is responsible for:
+This layer sits between the mission (survey these targets, keep the link to
+the GCS, get everyone home) and the flight controller (hold this setpoint). It
+is responsible for:
 
-  - assigning survey targets to scouts,
-  - routing them through the valley with terrain-following clearance,
-  - producing a *local* carrot setpoint a short distance ahead of the
-    aircraft rather than handing the controller a 3 km position error,
-  - enforcing the geofence and the deterministic return-to-home rule.
+  - allocating survey tasks to scouts, highest value first, and only when the
+    aircraft can afford the task AND the trip home, inside the mission clock;
+  - pre-empting a scout on a lower-priority task when a new high-priority one
+    appears that no idle scout can take;
+  - routing aircraft through the valley with terrain-following clearance and
+    handing the controller a *local* carrot setpoint, never a 3 km error;
+  - the full energy cycle: an energy-aware return-to-home trigger, landing on
+    a GCS pad, battery swap, and a READY state from which the role manager can
+    relaunch the aircraft;
+  - the lost-link failsafe, and the horizontal/vertical geofence.
 
 The carrot formulation matters for more than elegance: the LTC controller is
 trained on bounded tracking errors, so feeding it a raw kilometre-scale error
@@ -23,7 +29,9 @@ from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import Dict, List, Optional
 
+from .deconfliction import Deconfliction
 from .drone import Drone, DroneRole, DroneStatus
+from .energy import EnergyModel
 
 
 class MissionPhase(Enum):
@@ -33,7 +41,11 @@ class MissionPhase(Enum):
     TRANSIT = auto()        # cruising the corridor toward a target
     SURVEY = auto()         # descending onto / loitering over a PoI
     RELAY_HOLD = auto()     # station-keeping at a GNN-assigned relay position
+    RELAY_TRANSIT = auto()  # flying out to a relay station
     RTH = auto()            # returning to home
+    LANDING = auto()        # final descent onto a GCS pad
+    CHARGING = auto()       # on a pad, battery swap in progress
+    READY = auto()          # on a pad, charged, waiting to be launched
     MANUAL = auto()         # flying to an operator-commanded point
     LANDED = auto()
 
@@ -94,10 +106,32 @@ class GuidanceLayer:
     SURVEY_SPEED = 5.0
     CLIMB_SPEED = 6.0
 
-    def __init__(self, world, seed: int = 42):
+    # Landing: final approach height over the pad, touchdown test
+    PAD_APPROACH_AGL = 35.0
+    TOUCHDOWN_AGL = 5.5
+    TOUCHDOWN_RADIUS = 12.0
+
+    # Lost-link failsafe: an aircraft with no route to the GCS for this long
+    # returns home. Standard BVLOS practice, and what a UAV whose radio has
+    # failed must do on its own.
+    LOST_LINK_RTH_S = 60.0
+
+    # Geofence keep-in margin applied to every setpoint
+    GEOFENCE_MARGIN_M = 40.0
+
+    # Pre-emption: a busy scout is only pulled off its task for one at least
+    # this many priority levels more urgent.
+    PREEMPT_PRIORITY_GAP = 1
+
+    # Returns that are a choice, not a necessity: an aircraft flying home for
+    # one of these reasons can be turned round for a new task it can afford.
+    SOFT_RTH = ("no open targets", "relay no longer needed", "standing by")
+
+    def __init__(self, world, seed: int = 42, energy: Optional[EnergyModel] = None):
         self.world = world
         self.terrain = world.terrain
         self._rng = np.random.RandomState(seed)
+        self.energy = energy or EnergyModel(world)
 
         self.routes: Dict[str, Route] = {}
         self.phases: Dict[str, MissionPhase] = {}
@@ -106,6 +140,7 @@ class GuidanceLayer:
 
         # Relay stations commanded by the GNN topology optimiser
         self.relay_stations: Dict[str, np.ndarray] = {}
+        self._relay_routes: Dict[str, tuple] = {}   # drone_id -> (station, Route)
 
         # Operator overrides: drone_id -> commanded hover point. While set,
         # the autonomy (tasking and the GNN) leaves that aircraft alone.
@@ -113,10 +148,34 @@ class GuidanceLayer:
         # Cloud base (m AGL) in bad weather: aircraft must stay below it to
         # keep the ground in sight. None means clear skies.
         self.ceiling_agl = None
-        # Targets the EW response has held because a jammer overpowers them
+        # Targets held because an interference source overpowers them
         self.denied_pois: set = set()
 
+        # Mission clock. Tasks and the time limit are measured from launch;
+        # None means the mission has not been launched (no tasking).
+        self.mission_started: Optional[float] = 0.0
+        # Set once the mission is over: nothing is tasked or launched again.
+        self.recalled = False
+        self.rth_reasons: Dict[str, str] = {}
+
+        # Separation assurance, applied to every setpoint after planning
+        self.deconfliction: Optional[Deconfliction] = Deconfliction(world)
+
         self.events: List[dict] = []
+
+    # -- mission clock -------------------------------------------------------
+
+    def mission_time(self, sim_time: float) -> Optional[float]:
+        if self.mission_started is None:
+            return None
+        return sim_time - self.mission_started
+
+    def time_remaining(self, sim_time: float) -> Optional[float]:
+        limit = getattr(self.world, "time_limit_s", None)
+        t = self.mission_time(sim_time)
+        if limit is None or t is None:
+            return None
+        return limit - t
 
     # -- route construction -------------------------------------------------
 
@@ -165,9 +224,9 @@ class GuidanceLayer:
         return Route(waypoints=waypoints)
 
     def _build_rth_route(self, drone: Drone) -> Route:
-        """Deterministic return-to-home: climb, backtrack the corridor, descend."""
+        """Deterministic return-to-home: climb, backtrack the corridor, approach the pad."""
         start = drone.position.copy()
-        home = drone.home_position.copy()
+        home = np.asarray(drone.home_position, dtype=np.float64).copy()
         waypoints: List[np.ndarray] = []
 
         climb_z = self.world.safe_altitude_at(start[0], start[1], self.TRANSIT_CLEARANCE_M)
@@ -175,62 +234,279 @@ class GuidanceLayer:
         waypoints.extend(self._corridor_waypoints(start[0], float(home[0])))
         waypoints.append(np.array([home[0], home[1],
                                    self.world.safe_altitude_at(home[0], home[1], 60.0)]))
-        waypoints.append(home)
+        waypoints.append(np.array([home[0], home[1],
+                                   self.terrain.height_at(home[0], home[1]) + self.PAD_APPROACH_AGL]))
 
         return Route(waypoints=waypoints)
 
     # -- assignment ---------------------------------------------------------
 
+    def _feasible(self, drone: Drone, poi, sim_time: float) -> bool:
+        """Can this aircraft survey `poi` and still get home, inside the clock?"""
+        if not self.energy.can_afford(drone, poi.position):
+            return False
+        remaining = self.time_remaining(sim_time)
+        if remaining is not None and self.energy.time_to_complete(drone, poi.position) > remaining:
+            return False
+        return True
+
+    def _eta(self, drone: Drone, poi) -> float:
+        return self.energy.travel_time(drone.position, poi.position)
+
+    def _available_scouts(self, drones: Dict[str, Drone]) -> List[Drone]:
+        return [d for d in drones.values()
+                if d.is_alive and d.role == DroneRole.SCOUT
+                and self.phases.get(d.id) not in (MissionPhase.RTH, MissionPhase.LANDING)
+                and d.id not in self.manual_targets]
+
+    def _divertible(self, drones: Dict[str, Drone]) -> List[Drone]:
+        """Aircraft on a discretionary return that could be turned round."""
+        return [d for d in drones.values()
+                if d.is_alive and self.phases.get(d.id) == MissionPhase.RTH
+                and self.rth_reasons.get(d.id, "").startswith(self.SOFT_RTH)]
+
+    def _resume(self, drone: Drone, sim_time: float):
+        """Turn a discretionary return round: back to work as a scout."""
+        drone.role = DroneRole.SCOUT
+        drone.status = DroneStatus.ACTIVE
+        self.phases[drone.id] = MissionPhase.IDLE
+        self.routes.pop(drone.id, None)
+        self.rth_reasons.pop(drone.id, None)
+        self.events.append({"time": sim_time, "type": "DIVERT", "drone": drone.id,
+                            "message": f"{drone.id} turned round on its way home for new work"})
+
+    def open_tasks(self, sim_time: float) -> list:
+        """Released, unsurveyed, not-held targets (known to the swarm right now)."""
+        t = self.mission_time(sim_time)
+        if t is None:
+            return []
+        return [p for p in self.world.pois
+                if not p.surveyed and p.released(t) and p.id not in self.denied_pois]
+
     def assign_targets(self, drones: Dict[str, Drone], sim_time: float):
         """
-        Assign unsurveyed PoIs to idle scouts.
+        Allocate released, unsurveyed targets to scouts.
 
-        Selection is nearest-first weighted by PoI priority, so high-priority
-        targets are not starved just because they are further up the valley.
+        Greedy on value rate: each step takes the (scout, target) pair with
+        the highest  priority-weight / (ETA + 60 s)  among the pairs the scout
+        can afford — battery for the task AND the trip home, and time before
+        the mission clock runs out. A newly released priority-1 target that no
+        idle scout can take pre-empts the best-placed scout busy on a
+        lower-priority target.
         """
+        if self.recalled or self.mission_started is None:
+            return
+        scouts = self._available_scouts(drones)
+        divertible = self._divertible(drones)
+        if not scouts and not divertible:
+            return
+        idle = [d for d in scouts if not self.assignments.get(d.id)] + divertible
         taken = set(self.assignments.values())
-        unsurveyed = [p for p in self.world.get_unsurveyed_pois()
-                      if p.id not in taken and p.id not in self.denied_pois]
-        if not unsurveyed:
+        open_tasks = [p for p in self.open_tasks(sim_time) if p.id not in taken]
+        if not open_tasks:
             return
 
-        for drone in drones.values():
-            if not drone.is_alive or drone.role != DroneRole.SCOUT:
-                continue
-            if self.assignments.get(drone.id):
-                continue
-            if self.phases.get(drone.id) == MissionPhase.RTH:
-                continue
-            if drone.id in self.manual_targets:
-                continue
-            if not unsurveyed:
+        while idle and open_tasks:
+            best, best_value = None, 0.0
+            for d in idle:
+                for p in open_tasks:
+                    if not self._feasible(d, p, sim_time):
+                        continue
+                    value = p.weight / (self._eta(d, p) + 60.0)
+                    if value > best_value:
+                        best, best_value = (d, p), value
+            if best is None:
                 break
+            d, p = best
+            if d in divertible:
+                self._resume(d, sim_time)
+            self._assign(d, p, sim_time)
+            idle.remove(d)
+            open_tasks.remove(p)
 
-            def cost(poi):
-                dist = float(np.linalg.norm(poi.position[:2] - drone.position[:2]))
-                return dist * (0.6 + 0.25 * poi.priority)
-
-            poi = min(unsurveyed, key=cost)
-            unsurveyed.remove(poi)
-
-            self.assignments[drone.id] = poi.id
-            self.routes[drone.id] = self._build_survey_route(drone, poi)
-            self.phases[drone.id] = MissionPhase.TRANSIT
-            drone.assigned_poi = poi.id
-
+        # Pre-emption for urgent targets still unassigned
+        for p in sorted(open_tasks, key=lambda q: (q.priority, q.release_time)):
+            if p.priority > 1:
+                continue
+            busy = []
+            for d in scouts:
+                current_id = self.assignments.get(d.id)
+                if not current_id:
+                    continue
+                current = self._poi(current_id)
+                if current is None or current.priority - p.priority < self.PREEMPT_PRIORITY_GAP:
+                    continue
+                if self.phases.get(d.id) == MissionPhase.SURVEY:
+                    continue      # already over its target: let it finish
+                if self._feasible(d, p, sim_time):
+                    busy.append(d)
+            if not busy:
+                continue
+            d = min(busy, key=lambda q: self._eta(q, p))
+            dropped = self.assignments.pop(d.id)
             self.events.append({
-                "time": sim_time,
-                "type": "TASKING",
-                "drone": drone.id,
-                "poi": poi.id,
-                "message": f"{drone.id} tasked to survey {poi.id} ({poi.category})",
+                "time": sim_time, "type": "PREEMPT", "drone": d.id, "poi": p.id,
+                "message": (f"{d.id} pre-empted from {dropped} to priority-{p.priority} "
+                            f"{p.id} ({p.category.replace('_', ' ')})"),
             })
+            self._assign(d, p, sim_time)
+
+        # A scout that cannot afford any open task — but could on a fresh
+        # battery — goes home to recharge instead of loitering until its
+        # battery forces the issue.
+        still_open = [p for p in self.open_tasks(sim_time)
+                      if p.id not in set(self.assignments.values())]
+        if still_open:
+            for d in idle:
+                if self.assignments.get(d.id) or d in divertible:
+                    continue
+                if any(self.energy.can_afford(d, p.position) for p in still_open):
+                    continue
+                if any(self.energy.can_afford(d, p.position, battery=100.0) for p in still_open):
+                    self.send_home(d, sim_time, "recharge before next task")
+
+    def _poi(self, poi_id: str):
+        return next((p for p in self.world.pois if p.id == poi_id), None)
+
+    def _assign(self, drone: Drone, poi, sim_time: float):
+        self.assignments[drone.id] = poi.id
+        self.routes[drone.id] = self._build_survey_route(drone, poi)
+        self.phases[drone.id] = MissionPhase.TRANSIT
+        drone.assigned_poi = poi.id
+        self.events.append({
+            "time": sim_time,
+            "type": "TASKING",
+            "drone": drone.id,
+            "poi": poi.id,
+            "message": (f"{drone.id} tasked to survey {poi.id} "
+                        f"(P{poi.priority} {poi.category.replace('_', ' ')})"),
+        })
 
     def set_relay_station(self, drone_id: str, position: np.ndarray):
-        """Called by the GNN relay optimiser to command a relay position."""
+        """Called by the GNN relay optimiser / role manager to command a relay position."""
         if drone_id in self.manual_targets:
             return      # the operator has this aircraft; the GNN does not
-        self.relay_stations[drone_id] = np.asarray(position, dtype=np.float64)
+        position = np.asarray(position, dtype=np.float64).copy()
+        fence = getattr(self.world, "geofence", None)
+        if fence is not None:
+            position[0], position[1] = fence.project_inside(
+                position[0], position[1], self.GEOFENCE_MARGIN_M)
+        self.relay_stations[drone_id] = position
+
+    # -- energy cycle: return, land, recharge, relaunch ------------------------
+
+    def send_home(self, drone: Drone, sim_time: float, reason: str):
+        """Return-to-home for any reason; the aircraft gives up its mission role."""
+        if self.phases.get(drone.id) in (MissionPhase.RTH, MissionPhase.LANDING):
+            return
+        if not drone.is_alive:
+            return
+        self.phases[drone.id] = MissionPhase.RTH
+        self.routes[drone.id] = self._build_rth_route(drone)
+        drone.status = DroneStatus.RETURNING
+        previous = drone.role
+        drone.role = DroneRole.STANDBY
+        self.rth_reasons[drone.id] = reason
+        self.relay_stations.pop(drone.id, None)
+        self._relay_routes.pop(drone.id, None)
+        self.manual_targets.pop(drone.id, None)
+        drone.manual_target = None
+        drone.ew_hold = False
+
+        poi_id = self.assignments.pop(drone.id, None)
+        drone.assigned_poi = None
+
+        self.events.append({
+            "time": sim_time,
+            "type": "RTH",
+            "drone": drone.id,
+            "role": previous.name,
+            "reason": reason,
+            "message": f"{drone.id} ({previous.name.lower()}) returning to GCS — {reason}",
+        })
+        if poi_id:
+            self.events.append({
+                "time": sim_time, "type": "REASSIGN", "drone": drone.id, "poi": poi_id,
+                "message": f"{poi_id} released for reassignment",
+            })
+
+    def stand_by(self, drone: Drone, point, sim_time: float):
+        """Send an idle scout to loiter at a standby point, ready for new tasks."""
+        point = np.asarray(point, dtype=float).copy()
+        fence = getattr(self.world, "geofence", None)
+        if fence is not None:
+            point[0], point[1] = fence.project_inside(point[0], point[1], self.GEOFENCE_MARGIN_M)
+        self.routes[drone.id] = self._build_direct_route(drone.position, point)
+        self.phases[drone.id] = MissionPhase.TRANSIT
+        self.events.append({"time": sim_time, "type": "STANDBY", "drone": drone.id,
+                            "message": f"{drone.id} standing by mid-valley for new tasks "
+                                       f"({drone.battery:.0f}% battery)"})
+
+    def recall_all(self, drones: Dict[str, Drone], sim_time: float, reason: str):
+        """Mission over: bring every airborne aircraft home and stop tasking."""
+        self.recalled = True
+        for drone in drones.values():
+            if drone.is_alive:
+                self.send_home(drone, sim_time, reason)
+
+    def launch(self, drone: Drone, role: DroneRole, sim_time: float, reason: str = "") -> bool:
+        """Take off from the pad in `role`. Only a READY aircraft can launch."""
+        if drone.status != DroneStatus.READY or self.recalled:
+            return False
+        pad = np.asarray(drone.home_position, dtype=np.float64)
+        drone.position = np.array([pad[0], pad[1],
+                                   self.terrain.height_at(pad[0], pad[1]) + 4.0])
+        drone.velocity = np.zeros(3)
+        drone.status = DroneStatus.ACTIVE
+        drone.role = role
+        drone.charge_started = None
+        drone.lost_link_s = 0.0
+        self.routes.pop(drone.id, None)
+        self.phases[drone.id] = (MissionPhase.IDLE if role == DroneRole.SCOUT
+                                 else MissionPhase.RELAY_TRANSIT)
+        self.events.append({
+            "time": sim_time, "type": "LAUNCH", "drone": drone.id, "role": role.name,
+            "message": f"{drone.id} launched as {role.name.lower()}"
+                       + (f" — {reason}" if reason else ""),
+        })
+        return True
+
+    def _touchdown(self, drone: Drone, sim_time: float):
+        pad = np.asarray(drone.home_position, dtype=np.float64)
+        drone.position = np.array([pad[0], pad[1], self.terrain.height_at(pad[0], pad[1]) + 0.3])
+        drone.velocity = np.zeros(3)
+        drone.thrust_command = np.zeros(3)
+        drone.status = DroneStatus.CHARGING
+        drone.role = DroneRole.STANDBY
+        drone.charge_started = sim_time
+        drone.sorties += 1
+        drone.neighbors.clear()
+        drone.gcs_link = 0.0
+        self.phases[drone.id] = MissionPhase.CHARGING
+        self.routes.pop(drone.id, None)
+        self.events.append({
+            "time": sim_time, "type": "LANDED", "drone": drone.id,
+            "battery": float(drone.battery),
+            "message": (f"{drone.id} landed on its pad with {drone.battery:.0f}% — "
+                        "battery swap started"),
+        })
+
+    def _update_charging(self, drone: Drone, sim_time: float, dt: float):
+        if drone.status == DroneStatus.CHARGING:
+            self.phases[drone.id] = MissionPhase.CHARGING
+            rate = 100.0 / max(self.energy.config.recharge_s, 1.0)
+            drone.battery = min(100.0, drone.battery + rate * dt)
+            if drone.battery >= 99.9:
+                drone.battery = 100.0
+                drone.status = DroneStatus.READY
+                drone.min_battery_airborne = min(drone.min_battery_airborne, 100.0)
+                self.phases[drone.id] = MissionPhase.READY
+                self.events.append({
+                    "time": sim_time, "type": "READY", "drone": drone.id,
+                    "message": f"{drone.id} recharged and ready for launch",
+                })
+        elif drone.status == DroneStatus.READY:
+            self.phases[drone.id] = MissionPhase.READY
 
     # -- operator commands --------------------------------------------------
 
@@ -247,6 +523,9 @@ class GuidanceLayer:
         size = self.terrain.config.size_m
         x = float(np.clip(x, 30.0, size - 30.0))
         y = float(np.clip(y, 30.0, size - 30.0))
+        fence = getattr(self.world, "geofence", None)
+        if fence is not None:
+            x, y = fence.project_inside(x, y, self.GEOFENCE_MARGIN_M)
         if hover_agl is None:
             hover_agl = 45.0 if drone.role == DroneRole.SCOUT else 140.0
         target = np.array([x, y, self.terrain.height_at(x, y) + hover_agl])
@@ -267,7 +546,7 @@ class GuidanceLayer:
                         + (f"; {poi_id} released for re-tasking" if poi_id else "")),
         })
 
-    # -- electronic-warfare orders -------------------------------------------
+    # -- interference response orders -----------------------------------------
 
     def drop_assignment(self, drone_id: str, sim_time: float, reason: str):
         """Cancel a scout's survey tasking (the target has been denied)."""
@@ -279,12 +558,16 @@ class GuidanceLayer:
         drone = getattr(self, "_drones", {}).get(drone_id)
         if drone is not None:
             drone.assigned_poi = None
-        self.events.append({"time": sim_time, "type": "EW", "drone": drone_id,
+        self.events.append({"time": sim_time, "type": "INTERFERENCE", "drone": drone_id,
                             "message": f"{drone_id} re-tasked: {reason}"})
 
     def ew_withdraw(self, drone: Drone, point, sim_time: float = 0.0):
         """Pull a scout that has lost its link back to a point with signal."""
-        self.manual_targets[drone.id] = np.asarray(point, dtype=float)
+        point = np.asarray(point, dtype=float).copy()
+        fence = getattr(self.world, "geofence", None)
+        if fence is not None:
+            point[0], point[1] = fence.project_inside(point[0], point[1], self.GEOFENCE_MARGIN_M)
+        self.manual_targets[drone.id] = point
         drone.manual_target = self.manual_targets[drone.id]
         drone.ew_hold = True
         self.routes[drone.id] = self._build_direct_route(drone.position, drone.manual_target)
@@ -342,11 +625,9 @@ class GuidanceLayer:
             waypoints.append(np.array([x, y, z]))
         return Route(waypoints=waypoints)
 
-    def _update_manual(self, drone: Drone):
-        """Fly the operator's route, then hold over the commanded point."""
-        target = self.manual_targets[drone.id]
-        route = self.routes.get(drone.id)
-
+    def _fly_route(self, drone: Drone, route: Route, final_target: np.ndarray,
+                   speed: float = None):
+        """Carrot-follow `route`, then hold over `final_target`."""
         if route is not None and not route.finished:
             wp = route.current
             if float(np.linalg.norm(wp - drone.position)) < self.CAPTURE_RADIUS_M \
@@ -355,7 +636,7 @@ class GuidanceLayer:
                 wp = route.current
             aim = wp
         else:
-            aim = target
+            aim = final_target
 
         to_aim = aim - drone.position
         dist = float(np.linalg.norm(to_aim))
@@ -367,7 +648,11 @@ class GuidanceLayer:
         carrot[2] += drone.altitude_offset_cmd
 
         drone.target_position = carrot
-        drone.target_velocity = direction * min(self.CRUISE_SPEED, max(dist * 0.6, 0.0))
+        drone.target_velocity = direction * min(speed or self.CRUISE_SPEED, max(dist * 0.6, 0.0))
+
+    def _update_manual(self, drone: Drone):
+        """Fly the operator's route, then hold over the commanded point."""
+        self._fly_route(drone, self.routes.get(drone.id), self.manual_targets[drone.id])
 
     # -- per-tick update ----------------------------------------------------
 
@@ -377,18 +662,34 @@ class GuidanceLayer:
         self.assign_targets(drones, sim_time)
 
         for drone in drones.values():
+            if drone.on_pad:
+                self._update_charging(drone, sim_time, dt)
+                continue
             if not drone.is_alive:
                 self.phases[drone.id] = MissionPhase.LANDED
+                # A lost aircraft's task goes back into the pool at once
+                lost = self.assignments.pop(drone.id, None)
+                if lost is not None:
+                    drone.assigned_poi = None
+                    self.events.append({
+                        "time": sim_time, "type": "REASSIGN", "drone": drone.id, "poi": lost,
+                        "message": f"{lost} released for reassignment — {drone.id} lost",
+                    })
+                self.relay_stations.pop(drone.id, None)
                 continue
 
             self._check_battery(drone, sim_time)
+            self._check_lost_link(drone, sim_time, dt)
+            self._check_mission_clock(drone, sim_time)
 
-            if drone.id in self.manual_targets \
-                    and self.phases.get(drone.id) != MissionPhase.RTH:
+            phase = self.phases.get(drone.id)
+            if phase == MissionPhase.LANDING:
+                self._update_landing(drone, sim_time)
+            elif drone.id in self.manual_targets and phase != MissionPhase.RTH:
                 self.phases[drone.id] = MissionPhase.MANUAL
                 self._update_manual(drone)
             elif drone.role in (DroneRole.RELAY, DroneRole.GCS_RELAY) \
-                    and self.phases.get(drone.id) != MissionPhase.RTH:
+                    and phase != MissionPhase.RTH:
                 self._update_relay(drone, dt)
             else:
                 self._update_routed(drone, sim_time, dt)
@@ -415,45 +716,64 @@ class GuidanceLayer:
             self._apply_geofence(drone)
             drone.agl = self.world.agl(drone.position)
 
+        # Separation assurance last, then the fence and floor again so that
+        # avoidance can never push an aircraft out of the area or into terrain
+        if self.deconfliction is not None:
+            for drone in self.deconfliction.apply(drones):
+                self._apply_geofence(drone)
+
     def _check_battery(self, drone: Drone, sim_time: float):
-        """Deterministic RTH trigger — a hard rule, not a learned behaviour."""
-        if self.phases.get(drone.id) == MissionPhase.RTH:
+        """
+        Energy-aware return-to-home — a hard rule, not a learned behaviour.
+
+        The trigger is the battery needed to fly home from where the aircraft
+        is right now (plus a landing reserve), not a fixed percentage: a relay
+        3 km up the valley turns for home much earlier than one beside the GCS.
+        """
+        if self.phases.get(drone.id) in (MissionPhase.RTH, MissionPhase.LANDING):
             return
-        if drone.battery > drone.config.rth_reserve_pct:
+        threshold = self.energy.rth_threshold(drone)
+        if drone.battery > threshold:
             return
+        self.send_home(drone, sim_time,
+                       f"battery {drone.battery:.0f}% at the {threshold:.0f}% needed to get home")
 
-        self.phases[drone.id] = MissionPhase.RTH
-        self.routes[drone.id] = self._build_rth_route(drone)
-        drone.status = DroneStatus.RETURNING
+    def _check_lost_link(self, drone: Drone, sim_time: float, dt: float):
+        if self.phases.get(drone.id) in (MissionPhase.RTH, MissionPhase.LANDING):
+            drone.lost_link_s = 0.0
+            return
+        if getattr(drone, "connected", True):
+            drone.lost_link_s = 0.0
+            return
+        drone.lost_link_s = getattr(drone, "lost_link_s", 0.0) + dt
+        if drone.lost_link_s >= self.LOST_LINK_RTH_S:
+            self.send_home(drone, sim_time,
+                           f"lost-link failsafe: no route to GCS for {drone.lost_link_s:.0f} s")
 
-        # Release its survey target so another scout can pick it up
-        poi_id = self.assignments.pop(drone.id, None)
-        drone.assigned_poi = None
-
-        self.events.append({
-            "time": sim_time,
-            "type": "RTH",
-            "drone": drone.id,
-            "message": (f"{drone.id} below {drone.config.rth_reserve_pct:.0f}% reserve "
-                        f"— deterministic RTH engaged"),
-        })
-        if poi_id:
-            self.events.append({
-                "time": sim_time,
-                "type": "REASSIGN",
-                "drone": drone.id,
-                "poi": poi_id,
-                "message": f"{poi_id} released for reassignment",
-            })
+    def _check_mission_clock(self, drone: Drone, sim_time: float):
+        """Be on the pad by the end of the allotted time."""
+        remaining = self.time_remaining(sim_time)
+        if remaining is None:
+            return
+        if self.phases.get(drone.id) in (MissionPhase.RTH, MissionPhase.LANDING):
+            return
+        needed = self.energy.travel_time(drone.position, drone.home_position) + 20.0
+        if remaining <= needed:
+            self.send_home(drone, sim_time,
+                           f"mission clock: {max(remaining, 0):.0f} s left, {needed:.0f} s needed to land")
 
     def _update_relay(self, drone: Drone, dt: float):
-        """Relays hold the station the GNN gave them."""
+        """
+        Relays fly out to, then hold, the station the GNN gave them.
+
+        A station more than 200 m away is reached along a terrain-clearing
+        route rather than a straight line, since a relay launched from the
+        GCS pads is often a ridge away from where it is needed.
+        """
         station = self.relay_stations.get(drone.id)
         if station is None:
             station = drone.position.copy()
             self.relay_stations[drone.id] = station
-
-        self.phases[drone.id] = MissionPhase.RELAY_HOLD
 
         setpoint = station.copy()
         setpoint[2] += drone.altitude_offset_cmd
@@ -464,16 +784,51 @@ class GuidanceLayer:
 
         error = setpoint - drone.position
         dist = float(np.linalg.norm(error))
-        speed = min(self.CRUISE_SPEED, max(dist * 0.6, 0.0))
 
+        if dist > 200.0:
+            self.phases[drone.id] = MissionPhase.RELAY_TRANSIT
+            cached = self._relay_routes.get(drone.id)
+            if cached is None or float(np.linalg.norm(cached[0] - station)) > 120.0:
+                route = self._build_direct_route(drone.position, setpoint, clearance=80.0)
+                self._relay_routes[drone.id] = (station.copy(), route)
+            self._fly_route(drone, self._relay_routes[drone.id][1], setpoint)
+            return
+
+        self._relay_routes.pop(drone.id, None)
+        self.phases[drone.id] = MissionPhase.RELAY_HOLD
+        speed = min(self.CRUISE_SPEED, max(dist * 0.6, 0.0))
         drone.target_position = setpoint
         drone.target_velocity = (error / dist * speed) if dist > 1e-3 else np.zeros(3)
+
+    def _update_landing(self, drone: Drone, sim_time: float):
+        """Final descent onto the pad at a controlled rate, then touchdown."""
+        pad = np.asarray(drone.home_position, dtype=np.float64)
+        ground = self.terrain.height_at(pad[0], pad[1])
+        horizontal = float(np.linalg.norm(drone.position[:2] - pad[:2]))
+        agl = drone.position[2] - ground
+
+        if horizontal < self.TOUCHDOWN_RADIUS and agl < self.TOUCHDOWN_AGL:
+            self._touchdown(drone, sim_time)
+            return
+
+        # Centre over the pad first, then descend at ~2 m/s
+        if horizontal > 6.0:
+            z = max(drone.position[2], ground + 20.0)
+        else:
+            z = max(drone.position[2] - 2.5, ground + 3.5)
+        drone.target_position = np.array([pad[0], pad[1], z])
+        to = drone.target_position - drone.position
+        dist = float(np.linalg.norm(to))
+        drone.target_velocity = (to / max(dist, 1e-6)) * min(4.0, dist * 0.6)
 
     def _update_routed(self, drone: Drone, sim_time: float, dt: float):
         """Advance a scout (or returning aircraft) along its route."""
         route = self.routes.get(drone.id)
         if route is None or route.finished:
             self._on_route_complete(drone, sim_time)
+            if self.phases.get(drone.id) == MissionPhase.LANDING:
+                self._update_landing(drone, sim_time)
+                return
             route = self.routes.get(drone.id)
             if route is None or route.finished:
                 # Nothing to do — hold position
@@ -519,11 +874,12 @@ class GuidanceLayer:
         """Mark a PoI surveyed once the scout has dwelled over it."""
         poi_id = self.assignments.get(drone.id)
         if poi_id:
-            poi = next((p for p in self.world.pois if p.id == poi_id), None)
+            poi = self._poi(poi_id)
         else:
             # Not tasked (e.g. flying an operator order): survey whatever
-            # unsurveyed target it happens to be over.
-            nearby = [p for p in self.world.get_unsurveyed_pois()
+            # released, unsurveyed target it happens to be over.
+            t = self.mission_time(sim_time)
+            nearby = [p for p in self.world.get_unsurveyed_pois(t if t is not None else sim_time)
                       if float(np.linalg.norm(drone.position[:2] - p.position[:2]))
                       < self.SURVEY_RADIUS_M]
             poi = nearby[0] if nearby else None
@@ -557,7 +913,8 @@ class GuidanceLayer:
                 "type": "SURVEY_COMPLETE",
                 "drone": drone.id,
                 "poi": poi.id,
-                "message": f"{poi.id} ({poi.category}) surveyed by {drone.id}",
+                "message": (f"{poi.id} (P{poi.priority} {poi.category.replace('_', ' ')}) "
+                            f"surveyed by {drone.id}"),
             })
 
     def _on_route_complete(self, drone: Drone, sim_time: float):
@@ -565,15 +922,8 @@ class GuidanceLayer:
         phase = self.phases.get(drone.id)
 
         if phase == MissionPhase.RTH:
-            if self.world.agl(drone.position) < 3.0 or drone.battery <= 0.5:
-                drone.status = DroneStatus.LANDED
-                self.phases[drone.id] = MissionPhase.LANDED
-                self.events.append({
-                    "time": sim_time,
-                    "type": "LANDED",
-                    "drone": drone.id,
-                    "message": f"{drone.id} recovered at home point",
-                })
+            self.phases[drone.id] = MissionPhase.LANDING
+            self.routes.pop(drone.id, None)
             return
 
         # If the scout still owes a survey, hold over the target rather than
@@ -583,7 +933,7 @@ class GuidanceLayer:
         # completed — a deadlock that silently stalled the mission.
         poi_id = self.assignments.get(drone.id)
         if poi_id:
-            poi = next((p for p in self.world.pois if p.id == poi_id), None)
+            poi = self._poi(poi_id)
             if poi is not None and not poi.surveyed:
                 survey_z = self.terrain.height_at(
                     float(poi.position[0]), float(poi.position[1])
@@ -603,7 +953,8 @@ class GuidanceLayer:
         Hard geofence on the setpoint.
 
         Applied to the *setpoint*, not the state, so the aircraft is
-        commanded back inside the envelope rather than teleported.
+        commanded back inside the envelope rather than teleported: the
+        keep-in polygon (with a margin), the map edge, and the AGL band.
         """
         if drone.target_position is None:
             return
@@ -613,10 +964,15 @@ class GuidanceLayer:
         sp[0] = float(np.clip(sp[0], 20.0, size - 20.0))
         sp[1] = float(np.clip(sp[1], 20.0, size - 20.0))
 
+        fence = getattr(self.world, "geofence", None)
+        if fence is not None:
+            sp[0], sp[1] = fence.project_inside(sp[0], sp[1], self.GEOFENCE_MARGIN_M)
+
         ground = self.terrain.height_at(sp[0], sp[1])
-        sp[2] = float(np.clip(sp[2],
-                              ground + self.world.min_agl,
-                              ground + self.world.max_agl))
+        floor = ground + self.world.min_agl
+        if self.phases.get(drone.id) == MissionPhase.LANDING:
+            floor = ground + 3.0
+        sp[2] = float(np.clip(sp[2], floor, ground + self.world.max_agl))
 
     # -- reporting ----------------------------------------------------------
 
@@ -631,6 +987,8 @@ class GuidanceLayer:
             "assignments": dict(self.assignments),
             "relay_stations": {k: v.tolist() for k, v in self.relay_stations.items()},
             "manual_targets": {k: v.tolist() for k, v in self.manual_targets.items()},
+            "rth_reasons": dict(self.rth_reasons),
+            "recalled": self.recalled,
         }
 
     def reset(self):
@@ -641,4 +999,7 @@ class GuidanceLayer:
         self.assignments.clear()
         self._survey_timers.clear()
         self.relay_stations.clear()
+        self._relay_routes.clear()
+        self.rth_reasons.clear()
+        self.recalled = False
         self.events.clear()

@@ -1,26 +1,28 @@
 """
-Live mission injects — the things that go wrong once the swarm is committed.
+Environmental injects — the conditions that make a disaster zone hard to fly.
 
-The rehearsal phase trains the swarm against terrain, wind and a contested
-radio environment. This module is what the exercise controller (or a judge)
-throws at it *during* the live mission, on the spot:
+The mission scenario's disturbances (UAV failures, communication outages,
+packet loss, new tasks — see `mission.disturbances`) test the swarm's
+autonomy. These injects add the environment around them, and can be thrown in
+live from the dashboard or from a scenario's `weather` / `battery_fault`
+entries:
 
-    heavy_rain        Convective rainfall: turbulence, downdraughts, wet-
-                      antenna loss, higher power draw, degraded optics.
+    heavy_rain        Monsoon rainfall: turbulence, a lower cloud base the swarm
+                      must fly under, wet-antenna loss, higher power draw.
     storm_cell        A drifting mountain-wave / downdraught cell that will
                       push an aircraft into the ground if it flies through.
-    gps_denial        A spoofing/denial bubble: navigation drifts until the
-                      swarm notices and falls back to terrain-relative nav.
-    equipment_fault   A motor/battery fault on one aircraft: reduced thrust
-                      and double the power draw.
-    enemy_uav         A hostile interceptor drone hunting the swarm.
+    gps_denial        GNSS degradation in a deep valley (multipath, blocked
+                      sky): navigation drifts until the swarm notices and falls
+                      back to terrain-relative navigation.
+    equipment_fault   A motor / battery-cell fault on one aircraft: reduced
+                      thrust and double the power draw.
 
 Every inject acts on the physics, not on the display: rain changes the wind
 field and the link budget, the storm cell changes the vertical wind an
-aircraft actually feels, GPS denial changes the position the guidance layer
-believes. The swarm's response is therefore a real response, and the causal
-layer has to work out which of several simultaneous stressors is responsible
-for what it is seeing.
+aircraft actually feels, GNSS degradation changes the position the guidance
+layer believes. The swarm's response is therefore a real response, and the
+causal layer has to work out which of several simultaneous stressors is
+responsible for what it is seeing.
 """
 
 from __future__ import annotations
@@ -29,98 +31,12 @@ import numpy as np
 
 from sim.drone import DroneRole, DroneStatus
 
-KINDS = ("heavy_rain", "storm_cell", "gps_denial", "equipment_fault", "enemy_uav")
-
-
-class EnemyUAV:
-    """
-    Hostile interceptor drone.
-
-    Flies to the swarm and rams the aircraft it is chasing. It is detected by
-    the swarm's radio-frequency and optical sensors at a range that depends on
-    weather, which is why heavy rain and an enemy UAV together are harder than
-    either alone.
-    """
-
-    SPEED = 34.0
-    TURN_RATE = np.radians(45)
-    CLIMB = 12.0
-    KILL_RADIUS = 16.0
-    LETHAL_RADIUS = 18.0        # our interceptor's warhead against it
-
-    def __init__(self, uav_id, position, sim_time):
-        self.id = uav_id
-        self.position = np.asarray(position, dtype=float)
-        self.velocity = np.zeros(3)
-        self.heading = 0.0
-        self.target_id = None
-        self.spawned = sim_time
-        self.detected = False
-        self.detected_at = None
-        self.destroyed = False
-        self.kills = 0
-        self.trail = []
-        self._tick = 0
-
-    def update(self, dt, world, drones, sim_time):
-        """Chase the nearest live aircraft. Returns events."""
-        events = []
-        if self.destroyed:
-            return events
-        self._tick += 1
-
-        # Prefer scouts: they are the mission, and they are furthest forward
-        live = [d for d in drones.values() if d.is_alive]
-        if not live:
-            return events
-        def cost(d):
-            return (float(np.linalg.norm(d.position - self.position))
-                    * (0.7 if d.role == DroneRole.SCOUT else 1.0))
-        target = min(live, key=cost)
-        self.target_id = target.id
-
-        rel = target.position - self.position
-        distance = float(np.linalg.norm(rel))
-        desired = np.arctan2(rel[1], rel[0])
-        err = (desired - self.heading + np.pi) % (2 * np.pi) - np.pi
-        self.heading += float(np.clip(err, -self.TURN_RATE * dt, self.TURN_RATE * dt))
-
-        vz = float(np.clip(rel[2], -self.CLIMB, self.CLIMB))
-        ground = world.terrain.height_at(float(self.position[0]), float(self.position[1]))
-        if self.position[2] < ground + 45.0:
-            vz = max(vz, self.CLIMB)
-        self.velocity = np.array([np.cos(self.heading) * self.SPEED,
-                                  np.sin(self.heading) * self.SPEED, vz])
-        self.position = self.position + self.velocity * dt
-        if self._tick % 5 == 0:
-            self.trail.append(self.position.tolist())
-            self.trail = self.trail[-120:]
-
-        if distance <= self.KILL_RADIUS:
-            target.kill(sim_time)
-            self.kills += 1
-            events.append(("ENEMY", f"{target.id} destroyed by hostile UAV {self.id} — "
-                                    "collision intercept", {"drone_id": target.id}))
-        return events
-
-    def get_state(self):
-        return {
-            "id": self.id,
-            "position": self.position.tolist(),
-            "velocity": self.velocity.tolist(),
-            "heading": self.heading,
-            "target": self.target_id,
-            "detected": self.detected,
-            "destroyed": self.destroyed,
-            "trail": self.trail,
-        }
+KINDS = ("heavy_rain", "storm_cell", "gps_denial", "equipment_fault")
 
 
 class MissionInjects:
-    """Owns every live-mission stressor and applies it to the physics."""
+    """Owns every environmental stressor and applies it to the physics."""
 
-    RADAR_RANGE_M = 1400.0        # clear-air detection range for a small UAV
-    EVADE_RANGE_M = 900.0         # threat range at which an aircraft breaks away
     NAV_DRIFT_MS = 1.6            # GPS-denied position drift, m/s
     NAV_DRIFT_CAP = 140.0
 
@@ -168,12 +84,10 @@ class MissionInjects:
         self.guidance.ceiling_agl = None
         self.world.ceiling_agl = None
         self.cells = []           # storm / downdraught cells
-        self.denial = []          # GPS denial bubbles
-        self.enemies = {}
+        self.denial = []          # GNSS degradation zones
         self.faults = {}
         self.nav_fallback = False
         self._counter = 0
-        self._evading = {}
         self.wind.rain_turbulence = 1.0
         self.wind.cells = []
 
@@ -193,7 +107,7 @@ class MissionInjects:
         self.world.ceiling_agl = self.cloud_base_agl
         # Convective rain is turbulent: the wind field gets rougher with it
         self.wind.rain_turbulence = 1.0 + rate / 35.0
-        self.log("WEATHER", f"Heavy rainfall inbound — {rate:.0f} mm/h, cloud base down to "
+        self.log("WEATHER", f"Heavy monsoon rainfall inbound — {rate:.0f} mm/h, cloud base down to "
                             f"{self.cloud_base_agl:.0f} m AGL: the swarm must descend below it "
                             "and fly under the ridge line. Turbulence up, "
                             f"optical detection range down, wet-antenna loss "
@@ -238,14 +152,14 @@ class MissionInjects:
             "centre": np.array([float(params.get("x", centre[0])),
                                 float(params.get("y", centre[1]))]),
             "radius": float(params.get("radius_m", 1600.0)),
-            # A spoofer pulls the solution steadily one way; plain jamming
-            # would only make it noisy.
+            # Multipath off valley walls biases the solution one way rather
+            # than just making it noisy.
             "bias": np.array([np.cos(self.rng.uniform(0, 2 * np.pi)),
                               np.sin(self.rng.uniform(0, 2 * np.pi))]),
         }
         self.denial.append(bubble)
         self.nav_fallback = False
-        self.log("EW", f"GNSS denial detected — {bubble['id']} centred "
+        self.log("GNSS", f"GNSS degradation — {bubble['id']} centred "
                        f"({bubble['centre'][0]:.0f}, {bubble['centre'][1]:.0f}), "
                        f"{bubble['radius']:.0f} m. Navigation solution drifting.",
                  {"zone": bubble["id"]})
@@ -263,29 +177,10 @@ class MissionInjects:
         severity = float(params.get("severity", 0.45))
         self.faults[drone_id] = severity
         drone.health = 1.0 - severity
-        self.log("FAULT", f"{drone_id} motor/ESC fault — {severity * 100:.0f}% thrust "
+        self.log("FAULT", f"{drone_id} motor/battery fault — {severity * 100:.0f}% thrust "
                           f"authority lost, power draw doubled. Aircraft cannot hold "
                           "station in gusts.", {"drone_id": drone_id})
         return {"drone_id": drone_id}
-
-    def _inject_enemy_uav(self, params, drones, sim_time):
-        size = self.world.terrain.config.size_m
-        live = [d for d in drones.values() if d.is_alive]
-        if not live:
-            raise ValueError("no aircraft airborne")
-        # Comes in from the far end of the valley, above the ridge line
-        lead = max(live, key=lambda d: d.position[0])
-        x = float(np.clip(lead.position[0] + float(params.get("standoff_m", 2600.0)),
-                          200.0, size - 200.0))
-        y = float(np.clip(lead.position[1] + self.rng.uniform(-400, 400), 200.0, size - 200.0))
-        z = self.world.terrain.height_at(x, y) + float(params.get("agl_m", 260.0))
-        self._counter += 1
-        enemy = EnemyUAV(f"HOSTILE-{self._counter}", [x, y, z], sim_time)
-        self.enemies[enemy.id] = enemy
-        self.log("ENEMY", f"Hostile UAV {enemy.id} inbound from "
-                          f"({x:.0f}, {y:.0f}) — closing on the swarm.",
-                 {"enemy_id": enemy.id})
-        return {"enemy_id": enemy.id}
 
     # -- physics couplings -----------------------------------------------------
 
@@ -316,7 +211,6 @@ class MissionInjects:
         events = []
         self._update_cells(dt)
         events += self._update_navigation(dt, drones, sim_time)
-        events += self._update_enemies(dt, drones, sim_time)
         self._apply_faults(drones)
         return events
 
@@ -360,71 +254,9 @@ class MissionInjects:
         # link, and those stop agreeing with the GNSS solution.
         if not self.nav_fallback and worst > 45.0:
             self.nav_fallback = True
-            events.append(("EW", "GNSS solution disagrees with mesh ranging by "
+            events.append(("GNSS", "GNSS solution disagrees with mesh ranging by "
                                  f"{worst:.0f} m — switching the swarm to terrain-relative "
                                  "navigation and disregarding GNSS.", {}))
-        return events
-
-    def _update_enemies(self, dt, drones, sim_time):
-        events = []
-        for enemy in list(self.enemies.values()):
-            if enemy.destroyed:
-                continue
-            events += enemy.update(dt, self.world, drones, sim_time)
-
-            # Detection: RF/optical, degraded by rain
-            if not enemy.detected:
-                reach = self.RADAR_RANGE_M * (0.55 + 0.45 * self.optical_range_factor())
-                closest = min((float(np.linalg.norm(d.position - enemy.position))
-                               for d in drones.values() if d.is_alive), default=1e9)
-                if closest < reach:
-                    enemy.detected = True
-                    enemy.detected_at = sim_time
-                    events.append(("ENEMY", f"Hostile UAV {enemy.id} detected at "
-                                            f"{closest:.0f} m, closing on {enemy.target_id}. "
-                                            "Threat response engaged.",
-                                   {"enemy_id": enemy.id, "request": "INTERCEPTOR"}))
-
-            if enemy.detected:
-                events += self._evade(enemy, drones, sim_time)
-        return events
-
-    def _evade(self, enemy, drones, sim_time):
-        """
-        Break the threatened aircraft away from the hostile UAV and put
-        terrain between them where possible. The relay optimiser then re-plans
-        the mesh around wherever the aircraft ends up.
-        """
-        events = []
-        target = drones.get(enemy.target_id)
-        if target is None or not target.is_alive:
-            return events
-        distance = float(np.linalg.norm(target.position - enemy.position))
-        if distance > self.EVADE_RANGE_M or target.id in self._evading:
-            return events
-
-        away = target.position[:2] - enemy.position[:2]
-        norm = float(np.linalg.norm(away)) or 1.0
-        size = self.world.terrain.config.size_m
-        best, best_score = None, -1e9
-        for bearing in np.linspace(-1.2, 1.2, 7):
-            rot = np.array([[np.cos(bearing), -np.sin(bearing)],
-                            [np.sin(bearing), np.cos(bearing)]])
-            point = target.position[:2] + rot @ (away / norm) * 700.0
-            point = np.clip(point, 60.0, size - 60.0)
-            ground = self.world.terrain.height_at(point[0], point[1])
-            # Prefer low ground away from the threat: terrain masking
-            score = -ground * 0.02 + float(np.linalg.norm(point - enemy.position[:2])) * 0.01
-            if score > best_score:
-                best, best_score = point, score
-        hide = np.array([best[0], best[1],
-                         self.world.terrain.height_at(best[0], best[1]) + 45.0])
-        self.guidance.ew_withdraw(target, hide, sim_time)
-        self._evading[target.id] = sim_time
-        events.append(("ENEMY", f"{target.id} breaking away from {enemy.id} — descending to "
-                                f"({hide[0]:.0f}, {hide[1]:.0f}) to mask behind terrain. "
-                                "Relay mesh re-planning around the manoeuvre.",
-                       {"drone_id": target.id, "enemy_id": enemy.id}))
         return events
 
     def _apply_faults(self, drones):
@@ -434,9 +266,6 @@ class MissionInjects:
                 self.faults.pop(drone_id, None)
                 continue
             drone.health = 1.0 - severity
-
-    def clear_evasion(self, drone_id):
-        self._evading.pop(drone_id, None)
 
     # -- reporting ---------------------------------------------------------------
 
@@ -456,5 +285,4 @@ class MissionInjects:
                            for z in self.denial],
             "nav_fallback": self.nav_fallback,
             "faults": dict(self.faults),
-            "enemies": [e.get_state() for e in self.enemies.values() if not e.destroyed],
         }

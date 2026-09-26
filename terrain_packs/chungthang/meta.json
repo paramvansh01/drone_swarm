@@ -1,0 +1,42 @@
+{
+  "id": "chungthang",
+  "name": "Chungthang",
+  "region": "Mangan, Sikkim",
+  "lat": 27.603,
+  "lon": 88.645,
+  "size_m": 5120.0,
+  "snow_line_m": 4800.0,
+  "description": "Teesta valley at Chungthang \u2014 hit by the October 2023 South Lhonak glacial-lake outburst flood, which took out the dam, bridges and the highway.",
+  "use_case": "Flood / landslide response in a steep gorge",
+  "resolution": 1025,
+  "context_size_m": 35840.0,
+  "context_resolution": 513,
+  "min_height_m": 1440.7767333984375,
+  "max_height_m": 3549.968017578125,
+  "rotation_k": 1,
+  "north_bearing_deg": 180.0,
+  "inner_bounds": [
+    27.58000071612957,
+    27.625994457781545,
+    88.61904941555457,
+    88.6709505844454
+  ],
+  "context_bounds": [
+    27.441903816151317,
+    27.763859706214195,
+    88.46334590888222,
+    88.82665409111775
+  ],
+  "sources": {
+    "elevation": "AWS Open Data Terrain Tiles (Terrarium; SRTM/Copernicus-derived)",
+    "imagery": "Sentinel-2 cloudless - https://s2maps.eu by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2016), CC BY 4.0",
+    "imagery_hr": "Esri World Imagery \u2014 Esri, Maxar, Earthstar Geographics, and the GIS User Community (local cache, not redistributed)"
+  },
+  "built": "2026-09-26",
+  "mid_bounds": [
+    26.882005121883132,
+    28.319282192439175,
+    87.83404423608135,
+    89.45595576391861
+  ]
+}

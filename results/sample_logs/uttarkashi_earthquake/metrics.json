@@ -1,0 +1,225 @@
+{
+  "summary": {
+    "mission": {
+      "mission_time_s": 582.0,
+      "time_limit_s": 900.0,
+      "tasks_total": 15,
+      "tasks_released": 15,
+      "tasks_surveyed": 15,
+      "tasks_delivered": 15,
+      "completion_rate": 1.0,
+      "completion_time_s": 389.9,
+      "priority_weighted_score": 1.0,
+      "within_time_limit": true,
+      "emergent_tasks": [
+        {
+          "id": "POI-010",
+          "priority": 1,
+          "released_s": 99.99999999999724,
+          "surveyed_after_s": 26.73999999999468,
+          "delivered_after_s": 27.30559999999457
+        },
+        {
+          "id": "POI-011",
+          "priority": 1,
+          "released_s": 329.9999999999898,
+          "surveyed_after_s": 59.35999999994601,
+          "delivered_after_s": 59.90559999994554
+        },
+        {
+          "id": "POI-012",
+          "priority": 1,
+          "released_s": 329.9999999999898,
+          "surveyed_after_s": 16.719999999984793,
+          "delivered_after_s": 17.30559999998428
+        },
+        {
+          "id": "POI-013",
+          "priority": 1,
+          "released_s": 329.9999999999898,
+          "surveyed_after_s": 32.51999999997042,
+          "delivered_after_s": 33.111699999969915
+        },
+        {
+          "id": "POI-014",
+          "priority": 1,
+          "released_s": 329.9999999999898,
+          "surveyed_after_s": 36.97999999996637,
+          "delivered_after_s": 37.50559999996591
+        },
+        {
+          "id": "POI-015",
+          "priority": 1,
+          "released_s": 329.9999999999898,
+          "surveyed_after_s": 34.13999999996895,
+          "delivered_after_s": 34.705599999968456
+        }
+      ],
+      "emergent_response_s_mean": 34.97328333330478,
+      "uavs_on_pads": [
+        "UAV-1",
+        "UAV-3",
+        "UAV-5"
+      ],
+      "uavs_lost": [
+        "UAV-2",
+        "UAV-4"
+      ]
+    },
+    "communication": {
+      "packet_delivery_ratio": 0.9995685005393743,
+      "pdr_telemetry": 0.9995510662177329,
+      "pdr_survey_data": 1.0,
+      "latency_ms_mean": 6.643476308105656,
+      "latency_ms_p95": 11.20000000000232,
+      "survey_data_latency_s_mean": 0.2568094444443927,
+      "connectivity_availability": 0.9999551066217733,
+      "all_uavs_connected_fraction": 0.999828060522696,
+      "downtime_s_total": 0.1,
+      "downtime_s_longest": 0.1,
+      "outage_count": 1,
+      "packets": {
+        "generated": {
+          "telemetry": 4455,
+          "survey": 180
+        },
+        "delivered": {
+          "telemetry": 4453,
+          "survey": 180
+        },
+        "dropped": {
+          "telemetry": 2,
+          "survey": 0
+        }
+      },
+      "survey_data_reopened": 0
+    },
+    "autonomy": {
+      "relay_reallocations": 6,
+      "handovers": 0,
+      "role_flaps": 0,
+      "reconfiguration_efficiency": 1.0,
+      "recovery_time_s_mean": 0.0,
+      "recovery_time_s_max": 0.0,
+      "disruptions": 6,
+      "disruptions_hitless": 6,
+      "disruptions_unrecovered": 0,
+      "failover_ms_last": null,
+      "relay_solves": 606
+    },
+    "robustness": {
+      "after_first_disruption": {
+        "availability": 1.0,
+        "pdr": 0.9992912827781715
+      },
+      "per_disruption": [
+        {
+          "kind": "uav_failure",
+          "t": 180.0,
+          "detail": {
+            "drone_id": "UAV-2"
+          },
+          "hitless": true,
+          "recovery_s": 0.0,
+          "availability_before": 1.0,
+          "availability_after": 1.0,
+          "pdr_before": 1.0,
+          "pdr_after": 1.0
+        },
+        {
+          "kind": "uav_failure",
+          "t": 180.0,
+          "detail": {
+            "uav": "UAV-2",
+            "role": "SCOUT"
+          },
+          "hitless": true,
+          "recovery_s": 0.0,
+          "availability_before": 1.0,
+          "availability_after": 1.0,
+          "pdr_before": 1.0,
+          "pdr_after": 1.0
+        },
+        {
+          "kind": "link_failure",
+          "t": 240.0,
+          "detail": {
+            "a": "UAV-1",
+            "b": "GCS",
+            "until": 280.000000000049
+          },
+          "hitless": true,
+          "recovery_s": 0.0,
+          "availability_before": 1.0,
+          "availability_after": 1.0,
+          "pdr_before": 1.0,
+          "pdr_after": 0.9979757085020243
+        },
+        {
+          "kind": "packet_loss",
+          "t": 360.0,
+          "detail": {
+            "node": "*",
+            "rate": 0.2,
+            "until": 449.99999999996254
+          },
+          "hitless": true,
+          "recovery_s": 0.0,
+          "availability_before": 1.0,
+          "availability_after": 1.0,
+          "pdr_before": 1.0,
+          "pdr_after": 0.9979591836734694
+        },
+        {
+          "kind": "uav_failure",
+          "t": 400.0,
+          "detail": {
+            "drone_id": "UAV-4"
+          },
+          "hitless": true,
+          "recovery_s": 0.0,
+          "availability_before": 1.0,
+          "availability_after": 1.0,
+          "pdr_before": 1.0,
+          "pdr_after": 0.9972375690607734
+        },
+        {
+          "kind": "uav_failure",
+          "t": 400.0,
+          "detail": {
+            "uav": "UAV-4",
+            "role": "STANDBY"
+          },
+          "hitless": true,
+          "recovery_s": 0.0,
+          "availability_before": 1.0,
+          "availability_after": 1.0,
+          "pdr_before": 1.0,
+          "pdr_after": 0.9972375690607734
+        }
+      ]
+    },
+    "safety": {
+      "collisions": 0,
+      "near_misses": 0,
+      "min_separation_m": 14.97,
+      "terrain_contacts": 0,
+      "conflicts_resolved": 4,
+      "geofence_violations": 0,
+      "geofence_violation_s": 0.0,
+      "altitude_violations": 0,
+      "battery_depleted": 0,
+      "min_battery_pct": 27.4,
+      "min_landing_battery_pct": 27.4,
+      "landings": 3
+    }
+  },
+  "indicative_scores": {
+    "mission_completion": 100.0,
+    "communication_resilience": 100.0,
+    "relay_role_management": 100.0,
+    "fault_recovery": 100.0,
+    "safety": 100.0,
+    "weighted_95pct_of_rubric": 100.0
+  }
+}

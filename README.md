@@ -1,32 +1,31 @@
-# C-DAWN — Causal Dynamic Aerial Wireless Network
+# C-DAWN — Resilient BVLOS swarm for disaster response
 
-**Resilient BVLOS swarm autonomy for disaster response and contested RF environments.**
-PUSHPAK Grand Challenge 2026 · Grand Challenge 1 (UAV-X) · Simulation track
+**PUSHPAK Grand Challenge 2026 · Grand Challenge 1: UAV-X Resilient BVLOS Swarm Challenge · Simulation track**
 
-A five-aircraft swarm surveys **real Himalayan terrain** (Galwan, Dras, Siachen, Kedarnath, Tawang),
-chosen from a globe, or a synthetic training valley. Relays position themselves with an E(3)-equivariant GNN, a
-structural causal model tests *why* each link fails before acting on it, and the
-whole mission runs across three laptops on one Wi-Fi network, each showing a
-cinematic Three.js view of the same live state.
+An earthquake or landslide has taken out the roads and the mobile network in a Himalayan valley. A Ground Control Station (GCS) is set up outside the affected area with a fleet of battery-limited UAVs. C-DAWN flies them autonomously. It surveys every reported damage site, keeps every aircraft connected to the GCS through a self-organising multi-hop relay chain, and brings the survey data home. The fleet cycles through battery swaps without breaking the chain, re-plans when a UAV fails or a link degrades, and drops lower-priority work when a new high-priority emergency is reported. All of this runs within the allotted time, inside a geofence, with no collisions and no aircraft run flat.
 
-Everything on screen is labelled **simulation**. Nothing here has flown.
+It runs on real terrain at four Indian disaster sites and on a synthetic training valley. Every run writes the challenge's metrics and a full log set. Everything is simulated; nothing here has flown.
 
 ---
 
-## 1. Three-laptop demonstration
+## 1. How the problem statement maps to the system
 
-| Laptop | Callsign | Role | What it computes |
+| The swarm must… | How C-DAWN does it | Where | Measured as |
 |---|---|---|---|
-| 1 | **ALPHA** | `sim` | Authoritative world: flight dynamics, flight control, RF channel, guidance |
-| 2 | **BRAVO** | `edge` | E(3)-GNN relay optimisation and SCM causal diagnostics/interventions |
-| 3 | **CHARLIE** | `gcs` | RAG pipeline and SITREP synthesis; operator dashboard |
+| **Survey all assigned disaster locations** | A task is assigned only if the scout can reach it, survey it and get home within its battery and the mission clock. Assignment is greedy on priority-weight ÷ time. A task counts only when its data reaches the GCS. | `sim/guidance.py`, `sim/energy.py` | completion rate, completion time, priority-weighted score |
+| **Maintain end-to-end communication with the GCS** | The GCS is a fixed ground node. A terrain-aware relay chain is sized from the link budget over the real heightmap. A GNN places the relays. SCM-aware routing and packet-level store-and-forward carry the traffic. | `mesh/roles.py`, `gnn/`, `mesh/routing.py`, `mesh/traffic.py` | PDR, latency, connectivity availability, downtime |
+| **Dynamically assign relay UAVs** | Any UAV can fly any role. The role manager decides how many relays are needed each second and who flies them: a charged aircraft from the pads first, otherwise the scout doing the least valuable work. | `mesh/roles.py` | relay reallocations, reconfiguration efficiency |
+| **Reconfigure when comms degrade, UAVs fail or return to recharge** | A failed relay is replaced within 100 ms. A causal model diagnoses *why* a link degrades. Scouts withdraw from interference. A relay going home to recharge hands its station to a replacement *before* it leaves (make-before-break). There is a lost-link failsafe. | `mesh/election.py`, `scm/`, `mesh/interference.py`, `mesh/roles.py` | recovery time, performance after failures |
+| **Prioritise newly emerging high-priority regions** | New tasks and regions are unknown until released. A P1 task pre-empts the best-placed scout on lower-priority work. Idle scouts wait mid-valley on standby. Scouts on a discretionary return are turned round. | `sim/guidance.py`, `mesh/roles.py` | emergent-task response time, priority-weighted score |
+| **Complete the mission safely and within the allotted time** | Energy-aware RTH (not a fixed %), wind-aware return times, landing reserve, polygon geofence on every setpoint, predictive separation assurance, sequenced take-offs, home before the deadline. | `sim/energy.py`, `sim/world.py`, `sim/deconfliction.py` | collisions, minimum separation, battery depleted, geofence violations |
 
-These roles split real work between machines; they aren't three copies of one screen. BRAVO computes relay stations and
-`do(Δz)` altitude commands and sends them to ALPHA, which executes them on the aircraft. CHARLIE runs
-detection, retrieval and report generation. **Every laptop serves the full dashboard on its own IP**,
-so any of them can go on the projector.
+The architecture is described in **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
 
-### Setup (once per laptop)
+---
+
+## 2. Install
+
+Python 3.10 or newer. No GPU needed.
 
 ```bash
 git clone https://github.com/paramvansh01/hackbattle_drone.git
@@ -35,399 +34,228 @@ python3 -m venv .venv && source .venv/bin/activate      # Windows: .venv\Scripts
 pip install -r requirements.txt
 ```
 
-The dashboard is pre-built in `gcs/frontend/dist/`, so the laptops **do not need Node.js**.
-Trained model weights ship in `models/`. Everything runs offline once installed.
+The dashboard ships pre-built in `gcs/frontend/dist/`, so Node.js is only needed if you change the UI. Trained model weights ship in `models/` and terrain packs in `terrain_packs/`, so everything runs offline.
 
-### Launch
+## 3. Run it
 
-Put all three laptops on the same Wi-Fi network, then launch **ALPHA first**:
-
-```bash
-# Laptop 1 — ALPHA
-python run_node.py --role sim
-```
-
-ALPHA prints its address, for example `Dashboard  http://192.168.1.21:8080`. Then:
+**Watch a mission live** (opens the dashboard at http://localhost:8080):
 
 ```bash
-# Laptop 2 — BRAVO
-python run_node.py --role edge --peer 192.168.1.21
-
-# Laptop 3 — CHARLIE
-python run_node.py --role gcs  --peer 192.168.1.21
+python run_node.py --scenario kedarnath_landslide --autostart
 ```
 
-Open any laptop's printed URL in Chrome. Within a few seconds the **Cluster** panel shows all three
-nodes with their IPs, and the ownership rows show *Relay optimisation → BRAVO*,
-*Causal diagnostics → BRAVO*, *SITREP synthesis → CHARLIE*.
+Without `--autostart`, the fleet waits on its pads until you press **Launch mission**. Without `--scenario`, you get a default mission on the synthetic valley. Pick any disaster site from the globe, or add `?globe=0` to the URL to skip the globe.
 
-`--peer` is optional because nodes also find each other by UDP broadcast on port 45454. Give it
-anyway at a venue: many conference networks block traffic between wireless clients.
-
-### If a laptop drops out
-
-Nothing stops. Delegation is granted only while results keep arriving. If BRAVO goes quiet for
-1.5 s, ALPHA takes relay optimisation and causal diagnostics back and runs them locally. This was
-tested by killing BRAVO mid-mission; its work was back on ALPHA within 5 s. Restart BRAVO and it takes the
-work over again on its first result.
-
-### Single laptop (rehearsal / fallback)
+**Run a scenario headless** and write the log set (5–9× faster than real time):
 
 ```bash
-python run_node.py            # --role all is the default; same as: python demo/run_demo.py
+python run_scenario.py scenarios/synthetic_quickstart.json          # ~1.5 min
+python run_scenario.py scenarios/kedarnath_landslide.json --out logs/ked
+python run_scenario.py scenarios/stress_hidden_disturbances.json --strategy static   # the baseline
 ```
 
-### Useful flags
+**Run the benchmark suite** (every scenario × 3 seeds × {adaptive, baseline}, in parallel):
 
-| Flag | Meaning |
+```bash
+python -m bench.uavx_suite       # writes results/uavx_benchmarks.{json,md} and results/sample_logs/
+```
+
+**Run the tests** (138 tests, about 2 minutes):
+
+```bash
+python -m pytest
+```
+
+---
+
+## 4. Scenarios and disturbances
+
+A scenario fixes everything needed to reproduce a run: terrain, seed, fleet, GCS, geofence, tasks, time limit, weather and a timeline of hidden disturbances. Times are mission seconds after launch. Positions are local metres (`x`, `y`) or corridor-relative (`along` 0–1, `offset_m`), so a scenario works on any terrain. The full format is documented at the top of `mission/scenario.py`.
+
+| Scenario | Site | Fleet | Tasks | Time | What happens |
+|---|---|---|---|---|---|
+| `synthetic_quickstart` | training valley | 5 | 8 + 1 new | 12 min | relay failure, interference zone, 25% packet loss, new P1 report |
+| `kedarnath_landslide` | Kedarnath (2013 debris flow) | 6 | 10 + 6 new | 15 min | relay failure, GCS receiver outage, packet loss, P1 region, interference, relay battery fault, scout radio failure, late P1 report |
+| `uttarkashi_earthquake` | Uttarkashi (1991 M6.8 area) | 5 | 9 + 6 new | 15 min | aftershock collapse report, scout lost, relay↔GCS link failure, monsoon rain, packet loss, P1 region, a second aircraft lost |
+| `stress_hidden_disturbances` | training valley | 5 | 8 + 7 new | 15 min | everything the Stage 2 brief lists, twice: two UAV failures, radio failure, GCS outage, severed link, area RF degradation, 40% loss, battery fault, three new emergencies |
+
+These are the disturbance types (`mission/disturbances.py`). The same code serves the scenario director and the dashboard's live injects:
+
+| Type | Effect on the simulation (never on the swarm's knowledge) |
 |---|---|
-| `--port 8080` | HTTP port (moves to the next free port if busy) |
-| `--theatre kedarnath` | Starting theatre (`synthetic`, `galwan`, `kargil`, `siachen`, `kedarnath`, `tawang`) |
-| `--mode interactive\|scripted` | Default `interactive`: nothing happens until the operator acts. `scripted`: the timed 4-phase run |
-| `--phase-duration 45` | Seconds per phase in the scripted run (4 phases ≈ 3 minutes) |
-| `--no-scout-promotion` | Keep every scout surveying after a relay loss (more targets, possible comms gaps) |
-| `--controller pid\|ltc` | Flight controller to fly. Default `pid`; see §6.1 for why |
-| `--scenario high_pass` | Harder terrain (`demo/scenarios/`) |
-| `--no-browser` | Don't auto-open a browser |
+| `uav_failure` | An aircraft (by id, or the first `relay` / `scout`, or `random`) falls out of the sky |
+| `comm_outage` | Regional RF interference (`along`/`x,y` + `radius_m`), one aircraft's radio (`uav`), the GCS receiver (`gcs: true`), or an area-wide noise rise (`scope: global`) |
+| `packet_loss` | Extra loss on every link (`*`) or on one aircraft's links |
+| `link_failure` | One named link (for example `UAV-1` ↔ `GCS`) carries nothing |
+| `new_task` | A point task, or a `region` expanded into survey cells, released now |
+| `battery_fault` | An aircraft's power draw jumps and its thrust authority drops |
+| `weather` | Heavy rain (lower cloud base, wet antennas, turbulence), a downdraught cell, or GNSS degradation |
+| `wind_gust`, `phase` | A gust, or a label for the dashboard's phase bar |
 
----
+## 5. Metrics and logs
 
-## 2. Theatres — real terrain
+Metrics are computed by `mission/metrics.py` in the challenge's own categories.
 
-The dashboard opens on a **globe**. Pick a theatre and the simulation rebuilds on that real terrain;
-the swarm, the RF model and the 3D view all use the same elevation data. **Theatre ▾** in the header
-reopens the globe at any time.
-
-| Theatre | Region | Elevation | Use case |
-|---|---|---|---|
-| Galwan Valley | Eastern Ladakh | 4,122–6,070 m | Border surveillance, casualty evacuation relay |
-| Dras – Tololing | Kargil, Ladakh | 3,042–4,490 m | Ridge-line observation, highway corridor security |
-| Siachen Base | Nubra, Ladakh | 3,527–5,327 m | Logistics relay, avalanche search and rescue |
-| Kedarnath | Rudraprayag, Uttarakhand | 2,802–4,806 m | Flood / landslide response (2013 disaster site) |
-| Tawang | Arunachal Pradesh | 1,964–3,530 m | Sector surveillance, landslide response |
-| Nanda Devi Sanctuary | Garhwal (procedural training model) | 617–1,553 m | Training and repeatable benchmarks |
-
-Each theatre is a 5.1 × 5.1 km **terrain pack** in `terrain_packs/`, with a 10 m elevation grid and
-the matching satellite image draped on it. Packs ship in the repo, **so nothing is downloaded at the
-venue**.
-
-- **Elevation:** AWS Open Data Terrain Tiles (SRTM / Copernicus DEM derived). Public, no API key.
-- **Imagery:** Sentinel-2 cloudless 2016 by EOX IT Services (contains modified Copernicus Sentinel
-  data 2016), CC BY 4.0.
-- **Globe:** NASA Blue Marble (public domain) for the whole Earth. As you zoom in, Sentinel-2
-  cloudless map tiles stream in at the resolution the camera needs. The node caches them in
-  `terrain_packs/_tiles/`.
-- **Close-up imagery (local only):** `build_terrain_packs.py` also saves Esri World Imagery
-  (~2 m/px) as `*_hr.jpg`, for the sharp theatre view. These files are **gitignored** because Esri
-  imagery may not be redistributed. Without them, the committed Sentinel-2 imagery is used.
-- **Nanda Devi Sanctuary** is our original procedurally generated valley. It is placed at a real
-  Himalayan peak on the globe, but its terrain is synthetic.
-- **Mission corridor:** in real terrain the valley isn't carved in, so it is *found*. A dynamic-
-  programming search picks the cheapest west→east path along low ground. For Kedarnath it traces
-  the Mandakini valley up to the temple (≈ 3,600 m).
-- **Orientation:** a theatre whose main valley runs north-south is rotated so the mission axis runs
-  across the map. The on-screen **compass** always shows true north.
-
-**Before an offline venue**, run these once on each laptop while it has internet. They add the
-high-resolution close-ups and fill the globe's tile cache (~1,600 tiles, a few minutes):
-
-```bash
-python tools/build_terrain_packs.py          # terrain packs + Esri close-ups
-python tools/build_terrain_packs.py mids     # globe imagery around each theatre
-python tools/build_terrain_packs.py tiles    # globe satellite tile cache
-```
-
-**Adding a theatre:** add an entry (name, lat/lon, snow line) to `THEATRES` in
-`tools/build_terrain_packs.py` and run `python tools/build_terrain_packs.py <id>` once, on a
-connected machine. It appears on the globe after a server restart. MapmyIndia / Mappls could later
-provide place search and official basemaps with an API key. Mappls does not supply raw elevation,
-so the terrain itself still comes from open DEM data.
-
----
-
-## 3. Mission phases — rehearsal, then the live operation
-
-The demonstration runs in two phases across two laptops.
-
-**Phase 1 — pre-mission rehearsal (ground base).** The swarm trains against the
-selected theatre: real terrain, valley wind, terrain-masked links, operator-placed
-jammers. Nothing here is scripted, and the rehearsal is what the swarm carries into the
-mission: its backhaul PDR, self-heal time, relay solve count and surveyed targets are
-recorded as the readiness baseline.
-
-**Phase 2 — live mission (forward node).** `Launch mission` commits the swarm. The
-mission node flies it; every parameter streams back to the ground base, which is where a
-human approves anything the field cannot authorise itself.
-
-```bash
-# Laptop 1 — GROUND BASE (mission control, approvals)
-python run_node.py --role gcs --peer 192.168.1.21
-
-# Laptop 2 — FORWARD NODE (authoritative simulation of the operation)
-python run_node.py --role sim --theatre galwan      # this is 192.168.1.21
-
-# Laptop 3 (optional) — tactical edge compute: GNN + causal layer
-python run_node.py --role edge --peer 192.168.1.21
-```
-
-Both dashboards show the same authoritative state. Operator commands issued at the base
-are forwarded to the mission node, so the base can act as well as watch.
-
-### Injects — what the exercise controller throws at it
-
-Once the mission is live, five stressors can be injected on the spot. Each acts on the
-physics, not on the display:
-
-| Inject | What it actually does |
-|---|---|
-| **Heavy rain** | Roughens the wind field, wets the antennas (up to 3.5 dB per aircraft), raises power draw ~40%, cuts optical detection range. Feeds the causal model's weather term. |
-| **Downdraught cell** | A drifting mountain-wave cell with a 9 m/s sink that will fly an aircraft into the ground. |
-| **GNSS denial** | A spoofing bubble: the believed position drifts steadily, so aircraft fly to the wrong place until the mesh ranging disagrees enough for the swarm to notice and fall back to terrain-relative navigation. |
-| **Equipment fault** | Motor/ESC failure: thrust authority cut ~45%, power draw doubled. The aircraft cannot hold station in gusts and RTHs. |
-| **Hostile UAV** | An enemy interceptor drone that hunts the swarm and rams the aircraft it is chasing. |
-
-### How the swarm survives them
-
-- **Causal layer.** With rain, terrain and jamming acting at once, the SCM now carries a
-  weather regressor of its own (`L = σ(β₀ + β_T·T + β_D·D + β_J·J + β_W·W + β_θ·θ)`), so
-  loss caused by wet antennas and gust-loaded attitude is not blamed on the mountain. The
-  intervention engine still proves terrain by experiment rather than inference (§3).
-- **GNN relay layer.** Every evasion, withdrawal and aircraft loss changes the topology;
-  the relay optimiser re-solves against the live link budget (including located jammers)
-  and repositions the mesh to hold the backhaul.
-- **Threat response.** A detected hostile UAV makes the threatened aircraft break away and
-  descend behind terrain, and raises an IMMEDIATE support request to the ground base.
-- **Support requests.** The field node can ask, but not act: `INTERCEPTOR` release and
-  `REPLACEMENT_UAV` both require a human at the base to approve. Approving an interceptor
-  against a hostile UAV switches its seeker to radar/optical tracking of a moving target.
-
----
-
-## 3. Operator guide — everything is under your control
-
-The simulation starts with five aircraft holding station and **nothing scripted**. Whoever has the
-mouse decides what happens. The **Operator Control** panel sits in the top-right of the 3D view.
-
-| To… | Do this |
-|---|---|
-| Deploy a drone | **+ Scout** or **+ Relay**, then click the terrain. Scouts task themselves to targets; the GNN positions relays |
-| Mark a survey target | **+ Target**, then click the terrain. The nearest free scout is tasked to it |
-| Emplace a jammer | **+ Jammer**, then click the terrain. The slider sets its power. Its signal is blocked by terrain like any other radio, so a drone can hide behind a ridge |
-| Take a drone down | **Take down** on any aircraft in the Swarm list (or select it in 3D). It falls, and the mesh self-heals |
-| Bring it back | **Relaunch** |
-| Fly a drone yourself | Select it → **Send to…** → click the destination. **Release to autonomy** hands it back |
-| Change a drone's job | **Make relay / Make scout** |
-| Weather | **▸ Weather & mission** → wind speed/direction sliders, **Trigger gust** |
-| Situation report | **▸ Weather & mission** → **Generate SITREP**, then **Download** in the Situation Report panel |
-| Strike a jammer | Once the swarm has located it, **Authorise interceptor** (alert card, or select the jammer). Two per mission; **Abort** while in flight |
-| Remove a jammer / target | **Select** tool → click it → Neutralise (ground team) / Cancel |
-| Start over | **Reset mission to start** (sidebar) |
-| The hands-off 3-minute demo | **Run scripted 4-phase demo** |
-
-**Esc** always returns to the Select tool. A drag orbits the camera and a click places things. Every
-operator action is written to the Mission Log. Commands also work over REST:
-`curl -X POST localhost:8080/api/cmd/add_drone -d '{"role":"SCOUT","x":1500,"y":2050}'`.
-
-**Jamming — find, fix, finish.** A placed jammer is handled end to end by the autonomy, with a
-human deciding on the strike:
-
-1. **Detect** — every aircraft reports the noise floor at its receiver; a rise of more than 6 dB is jamming.
-2. **Locate** — the swarm fits a one-emitter propagation model (free-space loss plus terrain diffraction)
-   to those readings. It never reads the true position; the amber dashed ring is its estimate and
-   uncertainty, and the jammer card shows how far off it was.
-3. **Respond** — scouts that lose every link withdraw to the best predicted link position, targets the
-   jammer overpowers are held, and the relay planner includes the jammer in its link model.
-4. **Finish** — the operator authorises a home-on-jam interceptor (`mesh/electronic_warfare.py`,
-   `sim/interceptor.py`). It flies a terrain-clearing route to the estimate, then its passive seeker
-   locks the jammer's own emission and it homes with 3-D proportional navigation (8 g limit). A ridge
-   between them breaks lock; an overshoot triggers a re-attack; the fuze arms only after 300 m flown.
-   Launch is refused until the swarm has a fix.
-
-**Failure handling.** When a relay goes down, the election fills only the vacant role and never
-demotes a working aircraft. If relays fall below two, it promotes the best-placed scout to relay
-duty, but always keeps at least one scout surveying (§6).
-
----
-
-## 4. Reading the dashboard
-
-The layout is built for a lit briefing room and a projector: a light background, and colour used only for state
-(**green** nominal, **amber** caution, **red** alert).
-
-- **Situation banner (top-left):** the phase, a plain-language description of what's happening, and
-  **System action**, one sentence on what the autonomy is doing and why. For example: *"Ruled OUT
-  terrain on RELAY-2↔SCOUT-1: altitude made no difference, so the loss is hostile or range-limited.
-  Rerouting instead of climbing."*
-- **3D view:** the real terrain mesh (the same heightmap the RF model uses), the five aircraft, radio
-  links coloured by delivery ratio, survey beacons (amber → green when surveyed), and a red envelope
-  while jamming is active. An automatic director cuts between establishing cranes, chase, close orbit,
-  ridge and overhead shots, and cuts to events such as node loss or jamming. **Drag to orbit, scroll to
-  zoom**; press **AUTO** to hand the camera back. Click an aircraft in the Swarm panel to frame it.
-- **Causal Diagnostics:** the fitted structural equation, the verdict of the latest altitude test,
-  and, when the test could not identify a cause, *why not*.
-- **Relay Topology:** connectivity before, after the GNN's proposal, and after refinement, each shown separately.
-- **Flight Control:** live tracking error, plus the divergence of the other controller running
-  in shadow on the same gust.
-- **Logged Evidence:** the offline benchmark results (§6) next to the live figures.
-- **Metrics strip (bottom):** backhaul PDR, survey progress, battery, end-to-end self-heal time,
-  relay solve time, closest approach, collisions.
-
-### Scripted 3-minute run (optional)
-
-Press **Run scripted 4-phase demo** (or launch with `--mode scripted`) for a hands-off run:
-
-| Phase | Default window | What to point at |
+| Category | Metric | Definition |
 |---|---|---|
-| 1 · Launch & Survey | 0–45 s | Scouts climb out and follow the valley; relays take GNN stations; the director's establishing shots |
-| 2 · Contested RF | 45–90 s | RF degrades at +6 s and jamming starts at +16 s. Watch the red envelope, the causal tests, and the confounded verdicts when the jammer moves mid-test |
-| 3 · Node Loss | 90–135 s | RELAY-1 is killed at +6 s. The camera cuts to it, the election runs, and **Self-Heal** reads end-to-end latency (≈80 ms) |
-| 4 · SITREP | 135–180 s | CHARLIE synthesises cited reports; every observation line traces to a drone and timestamp |
+| Mission | completion rate | Released tasks whose survey data reached the GCS before the deadline ÷ released tasks |
+| | completion time | Mission time when the last released task was delivered |
+| | priority-weighted score | Σ weight × delivered ÷ Σ weight, with P1 = 3, P2 = 2, P3 = 1 |
+| | emergent response | Time from a new task's release to its data arriving at the GCS |
+| Communication | packet delivery ratio | Delivered ÷ generated packets. Telemetry is 2 Hz per UAV and dropped after 2 s. Survey data is 12 chunks per task, delay-tolerant. |
+| | latency | Creation → arrival at the GCS, per telemetry packet (mean, p95) |
+| | connectivity availability | Airborne time with an end-to-end path of reliability ≥ 0.5 to the GCS ÷ airborne time |
+| | downtime | Airborne time without such a path, summed over UAVs; outage count and longest outage |
+| Autonomy | relay reallocations | Every role change, logged with its reason (launch, promotion, demotion, handover) |
+| | recovery time | Per disruption: until every airborne UAV has had a path for 1 s. 0 if it never lost one. |
+| | reconfiguration efficiency | 1 − (role changes undone within 30 s ÷ role changes) |
+| Robustness | after failures | Availability and PDR over the 60 s after each disruption vs the 60 s before, and over the whole post-disruption mission |
+| Safety | collisions / separation | Pairs closer than 3 m (per incident); minimum distance between any two airborne UAVs over the mission |
+| | charge / geofence | Aircraft that ran flat; excursions outside the keep-in polygon or above the AGL ceiling; minimum battery |
 
-**Advance Phase** in *Demonstration Control* skips ahead. The fault buttons inject events on
-demand from any laptop; BRAVO and CHARLIE forward them to ALPHA.
+Every run writes the following log set. The organisers will publish a standard log format; `mission/recorder.py` is the single place to adapt to it.
 
----
+| File | Contents |
+|---|---|
+| `run_meta.json` | Scenario source, seed, code version (git hash), platform, wall-clock time |
+| `scenario_resolved.json` | The exact world flown: GCS, pads, geofence, every task with its release time and outcome |
+| `events.jsonl` | Every mission event in sim time: launches, tasking, pre-emption, surveys, deliveries, disturbances, failover, handovers, RTH and landings |
+| `uav_state.csv` | 1 Hz per UAV: position, AGL, speed, role, status, phase, battery, connected, path PDR, hops, GCS link, radio state, task, data backlog |
+| `links.csv` | 1 Hz: every live link and its PDR, including to the GCS |
+| `packets.csv` | Every packet: class, source, task, created, delivered, latency, hops, retries, outcome |
+| `metrics.json` | The summary above plus indicative rubric scores |
 
-## 5. Architecture
-
-```
-sim/        terrain.py    ridged-multifractal heightmap, carved valley corridor (4 km, 513²)
-            world.py      terrain + knife-edge diffraction (ITU-R P.526) RF obstruction
-            physics.py    underactuated multirotor: attitude lag, slew limit, airspeed drag
-            wind.py       power-law shear on height above ground + Dryden turbulence + gusts
-            rf_channel.py Friis + obstruction + Rician fading, PDR averaged over a packet burst
-            guidance.py   tasking, terrain-following routes, carrot setpoints, geofence, RTH
-            runner.py     50 Hz loop; flies one controller, shadows the other
-ltc/        ltc_cell.py, ltc_controller.py   Liquid Time-Constant controller (12.8k params)
-            expert.py     privileged teacher (sees true wind)      train.py   DAgger
-            pid_baseline.py   cascaded PID, tuned for this airframe
-gnn/        equivariant_layer.py, topology_net.py   E(3)-equivariant relay placement
-            rf_differentiable.py  torch link budget: terrain grid_sample + knife-edge
-            relay_optimizer.py    GNN proposal + 20-step gradient refinement   train.py
-scm/        causal_dag.py, diagnostics.py   L = σ(β₀ + β_T·T + β_D·D + β_J·J + β_θ·θ), bounded RLS
-            interventions.py  do(Δz) with probe ladder, Welch test, confound detection
-            causal_layer.py   per-link orchestration, one intervention in flight at a time
-mesh/       election.py, routing.py, mesh_network.py
-rag/        detector.py, embedder.py, vector_store.py, sitrep_generator.py
-cluster/    discovery.py (UDP), node.py (delegation), edge_client.py (WebSocket stream)
-gcs/        backend/ FastAPI + WebSocket (20 Hz)   frontend/ React + Three.js
-bench/      run_benchmarks.py, ltc_vs_pid.py
-run_node.py single launcher for every role
-```
+Sample logs from one run of each scenario are in `results/sample_logs/`. A live run can record the same set with `run_node.py --log-dir logs/`. The dashboard serves the current metrics at `/api/summary`.
 
 ---
 
 ## 6. Results
 
-These are logged, not narrated. All figures are mean ± s.d. over repeated randomised runs, regenerated by
-`python -m bench.run_benchmarks` and stored with protocols and per-trial values in
-`models/benchmarks.json`.
+Measured, not narrated: `python -m bench.uavx_suite` flies every shipped scenario with 3 seeds. It flies each one twice: once with the adaptive system, and once with a **fixed-role baseline**. The baseline keeps the same flight control, energy-aware RTH, geofence, relay placement network and packet model, but its roles are fixed at launch (one relay, the rest scouts). It has no failover promotion, no pre-emption, no handover, no standby, and no change in relay count. The difference between the two columns is what the adaptive autonomy is worth. Values are mean ± s.d. over all runs (12 per column), so the spread mostly reflects differences *between* scenarios. Seeds only vary fading and packet outcomes. Per-run values are in `results/uavx_benchmarks.json`, and full logs of one run per scenario are in `results/sample_logs/`.
 
-| Rubric metric | Target | Measured | Notes |
+| Metric | Adaptive (this system) | Fixed-role baseline |
+|---|---|---|
+| completion rate | 98.4 ± 2.7% | 87.3 ± 15.0% |
+| priority weighted score | 98.0 ± 3.4% | 83.3 ± 18.9% |
+| emergent response s | 42.6 ± 10.0 s | 156.3 ± 36.5 s |
+| packet delivery ratio | 96.7 ± 2.1% | 93.1 ± 4.7% |
+| latency ms mean | 9.1 ± 1.9 ms | 9.5 ± 2.3 ms |
+| connectivity availability | 95.3 ± 3.1% | 90.1 ± 6.3% |
+| downtime s total | 123.6 ± 81.3 s | 215.5 ± 138.8 s |
+| relay reallocations | 7.7 ± 1.2 | 7.0 ± 2.3 |
+| reconfiguration efficiency | 100.0 ± 0.0% | 100.0 ± 0.0% |
+| recovery time s mean | 6.8 ± 5.1 s | 10.8 ± 7.1 s |
+| post disruption availability | 93.8 ± 3.9% | 86.2 ± 8.5% |
+| post disruption pdr | 95.7 ± 2.7% | 90.3 ± 6.4% |
+| collisions | 0.0 ± 0.0 | 0.0 ± 0.0 |
+| min separation m | 21.8 ± 7.4 m | 18.9 ± 7.5 m |
+| geofence violations | 0.0 ± 0.0 | 0.0 ± 0.0 |
+| battery depleted | 0.0 ± 0.0 | 0.0 ± 0.0 |
+| min battery pct | 22.4 ± 5.3% | 34.0 ± 11.2% |
+
+## Per scenario (adaptive)
+
+| Scenario | Completion | Priority-weighted | PDR | Availability | Recovery | Collisions | Min battery |
+|---|---|---|---|---|---|---|---|
+| synthetic_quickstart | 100.0 ± 0.0% | 100.0 ± 0.0% | 95.6 ± 0.1% | 94.2 ± 0.1% | 5.3 ± 0.1 s | 0.0 ± 0.0 | 25.2 ± 0.1% |
+| kedarnath_landslide | 93.8 ± 0.0% | 92.1 ± 0.0% | 97.0 ± 0.0% | 95.5 ± 0.0% | 8.9 ± 0.0 s | 0.0 ± 0.0 | 13.5 ± 0.2% |
+| uttarkashi_earthquake | 100.0 ± 0.0% | 100.0 ± 0.0% | 99.9 ± 0.0% | 100.0 ± 0.0% | 0.0 ± 0.0 s | 0.0 ± 0.0 | 27.4 ± 0.1% |
+| stress_hidden_disturbances | 100.0 ± 0.0% | 100.0 ± 0.0% | 94.3 ± 0.6% | 91.3 ± 0.6% | 13.2 ± 3.1 s | 0.0 ± 0.0 | 23.4 ± 0.7% |
+
+What the numbers say:
+
+- **Priority handling is where adaptation pays most.** New emergencies reach the GCS in about 43 s, against about 156 s when they have to wait for a free scout.
+- **Completion and priority-weighted score** are 98% against 83–87%. The only miss is in Kedarnath: a P1 report arriving at T+600 s. It needed a 314 s round trip with 300 s left, and the planner holds every aircraft to being on its pad by the deadline, so it declined. Relaxing that rule (survey before the deadline, land after it) is a one-line policy change; we kept the stricter reading of "complete the mission safely and within the allotted time".
+- **Communication** is better throughout: higher PDR and availability, 40% less downtime, and faster recovery after disruptions, because the chain is re-sized and re-staffed instead of left as it was launched.
+- **Uttarkashi is a draw.** The Bhagirathi valley there is straight and open, one relay covers everything, and there is little for adaptation to win. That is expected.
+- **Safety:** no collisions, geofence violations or flat batteries in any run. The adaptive system flies its batteries harder (minimum 22% against 34%) because it keeps aircraft working longer, but always above the 8% landing reserve.
+
+---
+
+## 7. The dashboard
+
+The operations view shows the real terrain, the GCS with its pads, the geofence, the survey tasks, the aircraft and their radio links. Tasks are coloured by priority (P1 red, P2 amber, P3 yellow), then blue once surveyed and green once their data is at the GCS. A new emergency pulses.
+
+| To… | Do this |
+|---|---|
+| Start the mission | **Launch mission** (Operator Control, or the ground-base console) |
+| Report a new emergency | **+ Emergency**, then click the valley. It is a P1 task; watch a scout get pre-empted. |
+| Open a communication-outage zone | **+ Interference**, then click. The slider sets its power. Ridges shield aircraft from it. |
+| Throw a Stage 2 disturbance | **Inject a disturbance** (fail relay/scout, radio out, GCS outage, packet loss, battery fault, weather), or the **Disturbances** panel |
+| Fail / restore an aircraft | **Fail UAV** on its card, then **Return to service** (it goes back on its pad) |
+| Fly an aircraft yourself | Select it → **Send to…** → click. **Release to autonomy** hands it back. |
+| Watch the scripted demonstration | **Weather & reports → Run scripted demo**: launch, degraded comms, UAV failure, emergency region, recharge and handover (5 phases, 60 s each) |
+| Get the metrics | **Mission metrics (JSON)**, or `GET /api/summary` |
+
+The **Communication & Roles** panel shows the relay requirement and how many relays are flying, PDR, latency, availability, downtime, reallocations, recovery time and the data waiting in the air. The **ground base** view (`?view=base`) is the GCS mission-control screen.
+
+**Three laptops.** `python run_node.py --role sim` on one laptop, `--role edge --peer <ip>` on a second (relay placement and causal diagnosis), and `--role gcs --peer <ip>` on a third (SITREP synthesis). Every laptop serves the full dashboard. If an edge node goes quiet for 1.5 s, the sim node takes its work back.
+
+---
+
+## 8. What is inside
+
+```
+sim/       world.py        terrain + GCS + geofence + tasks; knife-edge RF obstruction
+           energy.py       battery/time planning: RTH threshold, task affordability, handover threshold
+           guidance.py     tasking, pre-emption, routes, RTH, landing, recharge, lost-link, geofence
+           deconfliction.py predictive separation assurance
+           physics.py, wind.py, rf_channel.py, terrain.py, injects.py, runner.py (50 Hz loop)
+mesh/      roles.py        relay requirement from terrain, who flies what, handover, launches, standby
+           traffic.py      packet-level telemetry/survey traffic, store-and-forward, comms metrics
+           election.py     100 ms relay failover        routing.py  SCM-aware routing incl. GCS
+           interference.py detect/localise interference, withdraw scouts, hold dead-zone targets
+gnn/       E(3)-equivariant relay placement + differentiable terrain link budget
+scm/       structural causal model of link loss + do(Δz) altitude interventions
+ltc/       cascaded PID (flies) and Liquid Time-Constant controller (shadow / selectable)
+mission/   scenario.py (format, loader, director)  disturbances.py  metrics.py  recorder.py (logs)
+rag/       on-board detection → embeddings → cited SITREPs
+gcs/       backend (FastAPI + WebSocket) and frontend (React + Three.js)
+cluster/   three-laptop discovery and delegation
+bench/     uavx_suite.py (mission benchmark) and component benchmarks
+scenarios/ the shipped mission scenarios      terrain_packs/ real-terrain sites
+run_node.py   live node / dashboard            run_scenario.py   headless run + logs
+```
+
+### Real terrain
+
+| Site | Region | Elevation | Event |
 |---|---|---|---|
-| Mission completion | all PoIs in battery margin | **66.7 ± 0.0 %** (5 valleys) | 4 of 6 targets per 200 s run, with 54 % battery left. After the relay kill a scout becomes a relay, which costs one target per run but keeps comms at 100 % (§6). `--no-scout-promotion` gets 5 of 6 back, at the price of a comms blackout of up to 17 s |
-| Communication resilience | PDR > 92 % in degradation | **99.9 %** backhaul under jamming | Links in this valley are short (< 1.5 km), so the scripted −74 dBm jammer barely bites. Operator-placed jammers (+ Jammer) are much more aggressive |
-| Autonomous relay management | no manual relay planning | **+18.5 ± 36.3 pts** connectivity over naive placement | 48 layouts on 6 terrains never seen in training; gain in 46 %, the rest were already optimal or infeasible. 1.4 ms proposal + 21 ms refinement |
-| Fault recovery | self-heal < 300 ms | **80 ms** end-to-end; **0 s** of backhaul outage after the relay kill (5 terrains) | Failure → detection → election → reroute. Dominated by the 100 ms check interval, so the worst case is ≈100 ms. Election compute alone is < 0.1 ms |
-| Safety & geofence | zero collisions, deterministic RTH | **0 collisions**, closest approach **25.1 m** | Spec is > 5 m. RTH is a hard rule at 22 % battery, not learned |
+| Kedarnath | Rudraprayag, Uttarakhand | 2,803–4,806 m | 2013 flash flood and debris flow |
+| Uttarkashi | Uttarkashi, Uttarakhand | 1,084–2,167 m | 1991 M6.8 earthquake area |
+| Joshimath | Chamoli, Uttarakhand | 1,350–3,048 m | 2023 land subsidence; 2021 Chamoli flood upstream |
+| Chungthang | Mangan, Sikkim | 1,441–3,550 m | 2023 South Lhonak glacial-lake outburst flood |
+| Nanda Devi Sanctuary | training model | 617–1,553 m | procedural valley for repeatable benchmarks |
 
-### 4.1 LTC flight controller vs cascaded PID: the claim did not hold
+Each site is a 5.1 × 5.1 km pack with a 5 m elevation grid (AWS Open Data terrain tiles, SRTM/Copernicus-derived) and Sentinel-2 cloudless imagery (EOX, CC BY 4.0). The mission corridor follows the valley floor, found by dynamic programming over the heightmap. To add a site, add it to `THEATRES` in `tools/build_terrain_packs.py` and run `python tools/build_terrain_packs.py <id>` once, with internet.
 
-`bench/ltc_vs_pid.py` flies both controllers through **identical** seeded gust profiles:
+### Component evidence
 
-| Regime | Controller | Cross-track RMS | Peak gust excursion | Control effort | Better on trial |
-|---|---|---|---|---|---|
-| In distribution (9–14 m/s) | LTC | 0.62 m | 1.25 m | 16.4 m/s² | 0 / 16 |
-| | **PID** | **0.18 m** | **0.74 m** | **6.6 m/s²** | 16 / 16 |
-| Out of distribution (18–26 m/s) | LTC | 1.99 m | 4.24 m | 17.1 m/s² | 2 / 16 |
-| | **PID** | **1.55 m** | **3.72 m** | **8.2 m/s²** | 14 / 16 |
+These are logged results from `python -m bench.run_benchmarks`, in `models/benchmarks.json`. They test the components in isolation, so the move to the ground-station model does not change them. That script's older mission section is superseded by `bench.uavx_suite` above.
 
-The LTC is fully implemented and trained: 12.8k parameters, DAgger against a privileged expert that
-sees the true wind, run in the real physics, with an action-smoothness penalty. The baseline still
-beats it in both regimes, including the out-of-distribution shocks the proposal names, and uses less than half the control effort.
-**The system therefore flies the PID by default.** `--controller ltc` flies the LTC instead; whichever controller
-isn't flying always runs in shadow on the same state and gust, and the dashboard shows both.
-
-### 4.2 Causal do(Δz) test: specific, not sensitive
-
-Scored against links with a known cause (`causal` in `benchmarks.json`):
-
-- **Jamming correctly ruled out as terrain: 100 %.** It never blamed terrain for a jammed link,
-  which is the costly error (climbing into the threat while the real cause goes unaddressed).
-- **Terrain confirmed: ~20 %.** There's a geometric reason. Raising one endpoint by Δz lifts the path
-  over an obstruction by only Δz · d₂/D, so a ridge near the *far* node is barely cleared. The
-  engine therefore keeps the proposal's +15 m as its first probe, escalates to +30 m and +60 m only
-  if nothing is detected, and hands unfixable obstructions to lateral relay repositioning.
-- An effect counts only if it clears **both** a 0.05 loss threshold and a Welch t-test (t ≥ 2) against
-  channel noise. If the jammer's noise floor or the link range moves during the window, or the
-  aircraft fails to climb, the result is reported as **confounded, not identified**. The proposal's
-  stated limitation is detected and shown per test instead of being disclosed once.
-
-### 4.3 Verified properties (`pytest`, 88 tests)
-
-- E(3) equivariance of each message-passing layer and of the whole relay network (rotation and
-  translation), checked numerically. This is the basis of the "generalises across geometries" claim.
-- The differentiable link budget matches the simulator's within 0.6 dB on average.
-- The terrain is bit-identical on every node (checksum), and the quantised payload round-trips to < 5 cm.
-- The engine refuses to claim an effect under a moving jammer, a failed climb or pure noise, runs one
-  intervention at a time, and gives back altitude after an inconclusive test.
-- Cluster delegation reverts on timeout and resumes on reconnect.
-
-```bash
-python -m pytest            # or: python run_tests.py
-```
+- **Relay placement:** on held-out terrain, the GNN proposal plus 20 refinement steps gains +18.5 ± 36.3 connectivity points over naive placement (48 layouts, 6 terrains), in about 1.4 ms for the proposal and 21 ms for the refinement. The GNN alone is a modest optimiser; most of the gain comes from the refinement it initialises.
+- **Causal diagnosis:** it never blamed terrain for an interference-caused loss (100%). It confirms genuine terrain shadow only about 20% of the time, because a single-node altitude probe has little leverage when the ridge is near the far node. Inconclusive tests are reported as *confounded*, never as a cause.
+- **Flight control:** the Liquid Time-Constant controller did **not** beat the cascaded PID on paired gust trials (PID was better in 16/16 in-distribution and 14/16 out-of-distribution trials, with half the control effort). So the PID flies, and the LTC runs in shadow or with `--controller ltc`.
 
 ---
 
-## 7. Retraining and regenerating
+## 9. Known limitations
 
-```bash
-python -m ltc.train --iterations 8 --episodes 80 --epochs 16 --hidden 48   # ~14 min
-python -m gnn.train --epochs 1200 --scenarios 24                           # ~55 min
-python -m bench.run_benchmarks          # full suite, ~7 min (--quick for a smoke test)
-python -m bench.ltc_vs_pid --regime out_of_distribution --trials 16
+- **Simulation only.** C-DAWN is its own Python simulator ("equivalent" under the challenge rules): one model for terrain, RF and flight. A PX4 SITL / ROS 2 bridge is planned for Stage 2. The autonomy talks to vehicles only through setpoints, so it would replace the physics and controller hooks, not the autonomy. It is not implemented yet.
+- **Physics simplifications.** Air density is not adjusted for altitude. Batteries are a linear state-of-charge model: about 18 minutes in hover, and a "swap" is a 90–120 s recharge on the pad.
+- **Radio model.** A single 900 MHz band. There is no MAC contention or bandwidth limit beyond a per-node survey rate, and interference sources are omnidirectional.
+- **Deterministic scenarios.** Seeds vary radio fading, packet outcomes and (in the stress scenario) task placement. Disturbance timelines are fixed per scenario, so the spread across seeds is small. Hidden Stage 2 scenarios are the real test.
+- **Standby costs energy.** Idle scouts loitering for new emergencies arrive faster but burn hover power. The policy stands them by only while they could still reach the far end of the area.
+- **Simulated detections.** Detections and SITREPs are generated from task categories, not from imagery (no YOLO or LLM in the loop). SITREPs come from a template that cannot hallucinate.
+- **The planner is conservative.** It uses a 1.2 safety factor, an 8% landing reserve, and every aircraft home by the deadline. A task at the edge of the energy or time envelope is declined rather than risked. In the shipped scenarios this cost one late emergency report, and never an aircraft.
 
-cd gcs/frontend && npm install && npm run build   # only if you change the UI
-```
-
----
-
-## 8. Known limitations
-
-- **Simulation only.** The hardware-in-the-loop track in the proposal is not implemented.
-- **Real terrain, simulated physics.** Theatre elevation and imagery are real. Air density is not
-  adjusted for altitude, so a drone at 5,000 m over Galwan flies as if at sea level. Imagery is a
-  2016 mosaic and doesn't show current conditions.
-- **The LTC does not beat PID** on this airframe and benchmark (§6.1).
-- **Single-node altitude probes have limited power** against deep terrain shadow (§6.2).
-- **The RAG pipeline runs in simulation mode.** Detections are sampled from each PoI's category rather than
-  produced by YOLOv11 on imagery, embeddings are deterministic stand-ins for CLIP, and SITREPs come
-  from a template that can't hallucinate by construction. The 100 % grounding result applies to that
-  template only; a Phi-3 backend would need the same harness re-run first.
-- **The GNN on its own is a modest optimiser** (+10 pts on held-out terrain). Most of the gain comes
-  from the 20-step refinement it initialises; the dashboard shows both figures.
-- **Relay coverage costs survey pace.** After a relay loss, a scout is promoted to relay, so fewer
-  targets are surveyed in the same time (§6).
-- **Jammer-aware relay placement helps less than the withdrawal does.** With the jammer in line of
-  sight down the valley there is little terrain shadow to exploit: backhaul 0.21 with the jammer in
-  the relay planner's link model vs 0.18 with it blind (Galwan, 25 dBm among the aircraft). Most of
-  the measured recovery comes from withdrawing the scouts, not from moving relays.
-- **The interceptor is a model, not a validated weapon simulation.** Point-mass flight, a fixed 18 m
-  lethal radius, 1.5° of seeker bearing noise, no countermeasures or air defence against it, and a
-  magazine of two. It shows the find-fix-finish loop closing; it is not a lethality estimate.
-- **Jammers are omnidirectional.** Operator-placed jammers have a real position, and terrain blocks
-  them, but they have no directional beam. The "Jam everywhere" quick fault is a global noise-floor rise.
-
----
-
-## 9. Troubleshooting
+## 10. Troubleshooting
 
 | Symptom | Fix |
 |---|---|
-| Peers never appear | Venue Wi-Fi isolates clients: use `--peer <ALPHA-IP>`. On macOS, allow Python in *System Settings → Network → Firewall* |
-| BRAVO/CHARLIE dashboard shows "Terrain unavailable" | That node can't reach ALPHA. Check that `curl http://<ALPHA-IP>:8080/api/health` works from it |
-| 3D view is slow | The console reports `software rendering detected` and detail drops automatically. Enable hardware acceleration in Chrome |
 | Port already in use | The launcher moves to the next free port and prints it |
 | Blank dashboard | `cd gcs/frontend && npm install && npm run build` |
+| Peers never appear (3 laptops) | Venue Wi-Fi isolates clients: use `--peer <sim-IP>`; allow Python through the firewall |
+| 3D view is slow | Enable hardware acceleration in Chrome; detail drops automatically on software rendering |
 
 MIT licence.

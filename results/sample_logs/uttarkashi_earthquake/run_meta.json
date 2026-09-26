@@ -1,0 +1,153 @@
+{
+  "scenario": {
+    "name": "Uttarkashi \u2014 earthquake response",
+    "path": "/Users/param/hackbattle_drone/scenarios/uttarkashi_earthquake.json",
+    "seed": 1,
+    "theatre": "uttarkashi"
+  },
+  "scenario_source": {
+    "name": "Uttarkashi \u2014 earthquake response",
+    "description": "Bhagirathi valley at Uttarkashi after a strong earthquake, the setting of the 1991 M6.8 event. Terrestrial networks are down. Five UAVs from a GCS at the valley mouth survey nine sites of collapsed buildings and blocked roads. Hidden disturbances: an aftershock collapse reported early, a scout lost, the first relay's link to the GCS failing, monsoon rain, sustained packet loss, another aircraft lost, and a priority-1 region of trapped survivors reported mid-mission.",
+    "theatre": "uttarkashi",
+    "seed": 23,
+    "time_limit_s": 900,
+    "fleet": {
+      "size": 5,
+      "recharge_s": 120
+    },
+    "geofence": {
+      "half_width_m": 700,
+      "max_agl_m": 400
+    },
+    "tasks": {
+      "list": [
+        {
+          "id": "POI-001",
+          "along": 0.08,
+          "offset_m": 80,
+          "priority": 1,
+          "category": "collapsed_building"
+        },
+        {
+          "id": "POI-002",
+          "along": 0.16,
+          "offset_m": -70,
+          "priority": 2,
+          "category": "blocked_road"
+        },
+        {
+          "id": "POI-003",
+          "along": 0.24,
+          "offset_m": 120,
+          "priority": 1,
+          "category": "collapsed_building"
+        },
+        {
+          "id": "POI-004",
+          "along": 0.32,
+          "offset_m": -90,
+          "priority": 3,
+          "category": "damaged_bridge"
+        },
+        {
+          "id": "POI-005",
+          "along": 0.4,
+          "offset_m": 60,
+          "priority": 2,
+          "category": "collapsed_building"
+        },
+        {
+          "id": "POI-006",
+          "along": 0.48,
+          "offset_m": -40,
+          "priority": 1,
+          "category": "trapped_survivors"
+        },
+        {
+          "id": "POI-007",
+          "along": 0.56,
+          "offset_m": 100,
+          "priority": 3,
+          "category": "landslide_debris"
+        },
+        {
+          "id": "POI-008",
+          "along": 0.64,
+          "offset_m": -60,
+          "priority": 2,
+          "category": "blocked_road"
+        },
+        {
+          "id": "POI-009",
+          "along": 0.72,
+          "offset_m": 40,
+          "priority": 3,
+          "category": "collapsed_building"
+        }
+      ]
+    },
+    "environment": {
+      "wind_mps": 3.0,
+      "wind_heading_deg": 0,
+      "turbulence": 1.2
+    },
+    "disturbances": [
+      {
+        "t": 100,
+        "type": "new_task",
+        "task": {
+          "along": 0.44,
+          "offset_m": 150,
+          "priority": 1,
+          "category": "collapsed_building"
+        }
+      },
+      {
+        "t": 180,
+        "type": "uav_failure",
+        "target": "scout"
+      },
+      {
+        "t": 240,
+        "type": "link_failure",
+        "a": "UAV-1",
+        "b": "GCS",
+        "duration": 40
+      },
+      {
+        "t": 300,
+        "type": "weather",
+        "kind": "heavy_rain",
+        "rate_mm_h": 25
+      },
+      {
+        "t": 330,
+        "type": "new_task",
+        "region": {
+          "along": 0.5,
+          "offset_m": -80,
+          "radius_m": 110,
+          "priority": 1,
+          "category": "trapped_survivors"
+        }
+      },
+      {
+        "t": 360,
+        "type": "packet_loss",
+        "rate": 0.2,
+        "duration": 90
+      },
+      {
+        "t": 400,
+        "type": "uav_failure",
+        "target": "random"
+      }
+    ]
+  },
+  "code_version": "c5aa68b",
+  "python": "3.13.7",
+  "platform": "macOS-15.5-arm64-arm-64bit-Mach-O",
+  "wall_clock_s": 115.5,
+  "sim_dt_s": 0.02,
+  "controller": "Cascaded PID"
+}

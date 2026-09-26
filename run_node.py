@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
 """
-C-DAWN node launcher.
+C-DAWN node launcher — UAV-X resilient BVLOS swarm (PUSHPAK Grand Challenge 2026).
 
 Single entry point for every laptop in the demonstration.
+
+    # One laptop: dashboard + simulation
+    python run_node.py
+    python run_node.py --scenario scenarios/kedarnath_landslide.json --autostart
 
     # Laptop 1 — ALPHA: authoritative simulation
     python run_node.py --role sim
@@ -54,7 +58,8 @@ BANNER = r"""
   \____|    |____/_/   \_\   \_/\_/  |_| \_|
 
   Causal Dynamic Aerial Wireless Network
-  Resilient BVLOS Swarm Autonomy — PUSHPAK Grand Challenge 2026
+  UAV-X Resilient BVLOS Swarm — disaster response
+  PUSHPAK Grand Challenge 2026 · Grand Challenge 1
 """
 
 
@@ -140,6 +145,7 @@ def build_edge_computer(role: NodeRole):
         drones_raw = telemetry.get("drones", {})
         if not drones_raw:
             return None
+        import numpy as np
 
         # Follow ALPHA onto a new theatre: rebuild the local world (packs ship
         # with the repo, so every laptop has the same terrain) and the
@@ -157,8 +163,14 @@ def build_edge_computer(role: NodeRole):
                 from scm.causal_layer import CausalLayer
                 causal = CausalLayer(world)
 
+        # The GCS may sit where a scenario put it, not at the default
+        gcs = telemetry.get("gcs") or {}
+        if gcs.get("position") is not None:
+            world.gcs.position = np.asarray(gcs["position"], dtype=float)
+
         _sync_mirror(mirror, drones_raw)
         sim_time = float(telemetry.get("sim_time", 0.0))
+        mission = telemetry.get("mission") or {}
         results = {}
         now = time.perf_counter()
 
@@ -166,7 +178,9 @@ def build_edge_computer(role: NodeRole):
         # The expensive one: rate-limited rather than run on all 20 frames/s.
         if optimizer is not None and now - state["last_topology"] > 0.5:
             state["last_topology"] = now
-            # The jammer position ALPHA's EW response has located, if any
+            optimizer.chain_hint = [np.asarray(p, dtype=float) for p in
+                                    ((mission.get("roles") or {}).get("chain_points") or [])]
+            # The interference source ALPHA's response has localised, if any
             ew = ((telemetry.get("rf") or {}).get("ew") or {})
             outcome = optimizer.optimize(
                 mirror, guidance=None,
@@ -205,8 +219,8 @@ def build_edge_computer(role: NodeRole):
         if rag is not None:
             _edge_detect(rag, mirror, telemetry.get("pois", []), sim_time,
                          state["detected"])
-            phase = (telemetry.get("metrics") or {}).get("current_phase", 0)
-            if phase >= 4 and sim_time - state["last_sitrep_time"] > 12.0:
+            if mission.get("phase") == "LIVE" and state["detected"] \
+                    and sim_time - state["last_sitrep_time"] > 45.0:
                 state["last_sitrep_time"] = sim_time
                 query = rag.embedder.embed_text("disaster situation overview survivors")
                 evidence = rag.store.query(query, top_k=6)
@@ -259,6 +273,7 @@ def _sync_mirror(mirror: dict, drones_raw: dict):
             drone.status = DroneStatus[st.get("status", "ACTIVE")]
             drone.battery = float(st.get("battery", 100.0))
             drone.neighbors = dict(st.get("neighbors", {}))
+            drone.gcs_link = float(st.get("gcs_link", 0.0))
             drone.sensors.rssi = dict(st.get("rssi", {}))
         except (KeyError, ValueError) as exc:
             logger.debug("Skipping drone %s in mirror: %s", drone_id, exc)
@@ -294,7 +309,7 @@ def _edge_detect(rag, mirror: dict, pois: list, sim_time: float, detected: set):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="C-DAWN node launcher",
+        description="C-DAWN node launcher (UAV-X)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
@@ -306,17 +321,25 @@ def main():
                              "or 192.168.1.21:8080 (default: auto-discover)")
     parser.add_argument("--host", type=str, default="0.0.0.0")
     parser.add_argument("--port", type=int, default=8080)
-    parser.add_argument("--scenario", type=str, default=None)
-    parser.add_argument("--phase-duration", type=float, default=45.0,
-                        help="Seconds per demo phase (default: 45)")
+    parser.add_argument("--scenario", type=str, default=None,
+                        help="Mission scenario: a JSON path, or a name in scenarios/ "
+                             "(e.g. kedarnath_landslide)")
+    parser.add_argument("--autostart", action="store_true",
+                        help="Launch the mission immediately instead of waiting on the pads")
+    parser.add_argument("--fleet", type=int, default=None,
+                        help="Number of UAVs (default: the scenario's, or 5)")
+    parser.add_argument("--log-dir", type=str, default=None,
+                        help="Write the mission logs (events, UAV state, packets, metrics) here")
+    parser.add_argument("--phase-duration", type=float, default=60.0,
+                        help="Seconds per phase of the scripted demonstration (default: 60)")
     parser.add_argument("--theatre", type=str, default="synthetic",
-                        help="Starting theatre: synthetic, galwan, kargil, siachen, "
-                             "kedarnath, tawang (terrain_packs/). Switchable from the globe.")
+                        help="Starting theatre: synthetic, kedarnath, uttarkashi, joshimath, "
+                             "chungthang (terrain_packs/). Switchable from the globe.")
     parser.add_argument("--mode", type=str, default="interactive",
                         choices=["interactive", "scripted"],
-                        help="interactive (default): the operator places drones, targets "
-                             "and jammers and decides what fails. scripted: the timed "
-                             "4-phase demonstration runs by itself.")
+                        help="interactive (default): the operator launches the mission and "
+                             "throws disturbances at it. scripted: the built-in demonstration "
+                             "(or the scenario's timeline) runs from launch.")
     parser.add_argument("--no-scout-promotion", action="store_true",
                         help="Never turn a scout into a relay after a relay loss. Faster "
                              "survey, but scouts can lose contact with base (see README §5).")
@@ -360,12 +383,19 @@ def main():
         from gcs.backend.telemetry import TelemetryAggregator
 
         scenario_path = None
+        scenario_theatre = None
         if args.scenario:
-            candidate = PROJECT_ROOT / "demo" / "scenarios" / f"{args.scenario}.json"
-            if candidate.exists():
-                scenario_path = str(candidate)
-            else:
+            for candidate in (Path(args.scenario),
+                              PROJECT_ROOT / "scenarios" / f"{args.scenario}.json",
+                              PROJECT_ROOT / "demo" / "scenarios" / f"{args.scenario}.json"):
+                if candidate.exists():
+                    scenario_path = str(candidate)
+                    break
+            if scenario_path is None:
                 logger.warning("Scenario %s not found — using default", args.scenario)
+            else:
+                import json as _json
+                scenario_theatre = _json.loads(Path(scenario_path).read_text()).get("theatre")
 
         telemetry = TelemetryAggregator()
 
@@ -392,17 +422,28 @@ def main():
                 telemetry.update_demo(d.get_state())
             return on_telemetry
 
-        def build_demo(theatre_id):
-            d = DemoController(scenario_path=scenario_path,
+        def build_demo(theatre_id, first=False):
+            # A scenario is tied to its theatre: switching theatre on the
+            # globe drops it and flies the default mission there instead.
+            use_scenario = scenario_path if (first or theatre_id == scenario_theatre) else None
+            d = DemoController(scenario_path=use_scenario,
                                phase_duration=args.phase_duration,
                                controller=args.controller,
                                mode=args.mode,
-                               theatre=theatre_id)
+                               theatre=theatre_id,
+                               fleet_size=args.fleet,
+                               autostart=args.autostart and first)
             d.cluster = cluster
             d.set_telemetry_callback(make_on_telemetry(d))
+            if args.log_dir:
+                from mission.recorder import MissionRecorder
+                stamp = time.strftime("%Y%m%d-%H%M%S")
+                d.recorder = MissionRecorder(Path(args.log_dir) / f"{theatre_id}-{stamp}", d, d.scenario)
+                d.sim.log_listeners.append(d.recorder.on_event)
+                d.finalize_recorder_on_end = True
             return d
 
-        demo = build_demo(args.theatre)
+        demo = build_demo(scenario_theatre or args.theatre, first=True)
         current = {"demo": demo}
 
         def load_theatre(theatre_id):
@@ -501,6 +542,7 @@ def main():
         logger.info("Shutting down %s", node_id)
         if demo:
             current["demo"].stop()
+            current["demo"].finalize_recording()
         if edge:
             edge.stop()
         if discovery:

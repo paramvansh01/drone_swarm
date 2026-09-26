@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 
 /**
- * Theatre of operations selector — a zoomable globe.
+ * Disaster-site selector — a zoomable globe.
  *
  * Imagery sharpens as the operator zooms:
  *   1. the whole Earth           NASA Blue Marble, 5400 x 2700
@@ -621,15 +621,15 @@ export default function TheatreSelector({ open, onClose, currentId, canClose }) 
 
         <div className="theatre__credit">
           Globe: NASA Blue Marble · Satellite tiles: Sentinel-2 cloudless 2016 (EOX, CC BY 4.0) ·
-          Theatre imagery: Esri World Imagery (local cache) · Terrain: SRTM/Copernicus via AWS Open Data
+          Site imagery: Esri World Imagery (local cache) · Terrain: SRTM/Copernicus via AWS Open Data
         </div>
       </div>
 
       <div className="theatre__panel">
         <div className="theatre__head">
           <div>
-            <div className="theatre__kicker">C-DAWN · Mission planning</div>
-            <div className="theatre__title">Select theatre of operations</div>
+            <div className="theatre__kicker">C-DAWN · UAV-X mission planning</div>
+            <div className="theatre__title">Select the disaster site</div>
           </div>
           {canClose && <button className="theatre__close" onClick={onClose}>Close ✕</button>}
         </div>

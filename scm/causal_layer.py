@@ -74,6 +74,10 @@ class CausalLayer:
                 roles = {d1.role, d2.role}
                 if roles == {DroneRole.SCOUT}:
                     continue
+                # Aircraft on their way home (or in reserve) are not part of
+                # the chain; their links are not faults to diagnose either.
+                if DroneRole.STANDBY in roles:
+                    continue
 
                 quality = d1.neighbors.get(d2.id)
                 if quality is None:

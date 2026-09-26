@@ -270,7 +270,7 @@ class InterventionEngine:
             record.recommendation = (
                 f"Not terrain: climbing had no effect, the map predicts only "
                 f"{0.0 if shadow is None else shadow:.0f} dB of ridge loss, and the noise floor "
-                f"is {rise:.0f} dB above thermal. Hostile interference — triggering handover."
+                f"is {rise:.0f} dB above thermal. RF interference — rerouting rather than climbing."
             )
         else:
             record.attribution = "not_terrain"

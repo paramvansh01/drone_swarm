@@ -1,9 +1,11 @@
 """
-Leader/relay election protocol for C-DAWN.
+Relay election for the UAV-X mesh: the fast path of fault recovery.
 
-Battery-weighted election protocol for relay role assignment
-with self-healing: on node failure, remaining drones re-elect
-within <300ms target.
+When a relay fails, the gap is filled immediately by promoting the
+best-scoring airborne scout — within one 100 ms check, well inside the
+<300 ms target. The steady-state question of how many relays the mission
+needs, and whether a charged aircraft should be launched from the GCS instead,
+belongs to `mesh.roles.RoleManager`, which sets `relay_count` every second.
 """
 
 import numpy as np
@@ -102,21 +104,7 @@ class RelayElection:
         scores = {d_id: score(d) for d_id, d in alive.items()}
         promoted = []
 
-        # 1. Ground-station relay: replace from the relays nearest home
-        gcs = next((d for d in alive.values() if d.role == DroneRole.GCS_RELAY), None)
-        if gcs is None:
-            lost = next((d for d in drones.values()
-                         if d.role == DroneRole.GCS_RELAY and not d.is_alive), None)
-            home = lost.position if lost is not None else np.zeros(3)
-            pool = [d for d in alive.values() if d.role == DroneRole.RELAY] or \
-                   [d for d in alive.values() if d.role == DroneRole.SCOUT]
-            if pool:
-                best = min(pool, key=lambda d: float(np.linalg.norm(d.position - home))
-                           / (0.2 + scores[d.id]))
-                best.role = DroneRole.GCS_RELAY
-                promoted.append((best.id, "GCS_RELAY"))
-
-        # 2. Relay count: optionally promote the best scout
+        # Relay count: promote the best scout into the vacant slot(s)
         relays = [d for d in alive.values() if d.role == DroneRole.RELAY]
         scouts = [d for d in alive.values() if d.role == DroneRole.SCOUT]
         if self.PROMOTE_SCOUTS:
@@ -134,7 +122,7 @@ class RelayElection:
         self._last_election_duration_ms = elapsed_ms
         self._last_election_time = sim_time
 
-        gcs_now = next((d.id for d in alive.values() if d.role == DroneRole.GCS_RELAY), None)
+        gcs_now = "GCS"
         result = {
             "status": "ok",
             "elapsed_ms": elapsed_ms,
@@ -161,19 +149,14 @@ class RelayElection:
         sim_time: float,
     ) -> Optional[Dict]:
         """
-        Check if self-healing is needed and run election if so.
+        Run the election when a relay has failed since the last check.
 
-        Triggers if:
-        1. A relay/GCS_relay node is dead
-        2. No relay exists in the swarm
+        Only genuine failures trigger it. Relays leaving to recharge are
+        replaced by the role manager's make-before-break handover instead,
+        before they go.
         """
         from sim.drone import DroneRole, DroneStatus
 
-        alive = {d_id: d for d_id, d in drones.items() if d.is_alive}
-        has_gcs_relay = any(d.role == DroneRole.GCS_RELAY for d in alive.values())
-        has_relay = any(d.role == DroneRole.RELAY for d in alive.values())
-
-        # Check for killed relay/GCS nodes
         killed_relays = [
             d_id for d_id, d in drones.items()
             if d.status == DroneStatus.KILLED and d.role in (DroneRole.RELAY, DroneRole.GCS_RELAY)
@@ -187,30 +170,12 @@ class RelayElection:
             self._handled_failures = set()
 
         new_failures = [d for d in killed_relays if d not in self._handled_failures]
-        structural_gap = not has_gcs_relay or not has_relay
-
-        if not new_failures and not structural_gap:
+        if not new_failures:
             return None
 
-        if structural_gap and not new_failures and getattr(self, "_gap_healed", False):
-            return None
-
-        logger.warning(
-            "Self-healing triggered: new_failures=%s has_gcs=%s has_relay=%s",
-            new_failures, has_gcs_relay, has_relay,
-        )
+        logger.warning("Self-healing triggered: new relay failures=%s", new_failures)
         self._handled_failures.update(new_failures)
-
-        result = self.run_election(drones, sim_time, force=True)
-
-        # Re-check the structural condition after the election so a genuine
-        # unrecoverable gap keeps reporting, but a healed one goes quiet.
-        alive_after = {d_id: d for d_id, d in drones.items() if d.is_alive}
-        self._gap_healed = (
-            any(d.role == DroneRole.GCS_RELAY for d in alive_after.values())
-            and any(d.role == DroneRole.RELAY for d in alive_after.values())
-        )
-        return result
+        return self.run_election(drones, sim_time, force=True)
 
     def record_heal_latency(self, drones: dict, sim_time: float,
                             extra_ms: float = 0.0) -> float:

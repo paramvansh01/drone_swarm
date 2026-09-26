@@ -1,5 +1,5 @@
 """
-Telemetry aggregation for the C-DAWN GCS.
+Telemetry aggregation for the C-DAWN GCS (UAV-X).
 
 Collects the simulation tick stream plus each subsystem's state into a single
 snapshot for the dashboard, and keeps bounded time-series histories for the
@@ -117,8 +117,10 @@ class TelemetryAggregator:
             "rf": latest.get("rf", {}),
             "wind": latest.get("wind", {}),
             "pois": latest.get("pois", []),
-            "interceptors": latest.get("interceptors", []),
             "injects": latest.get("injects", {}),
+            "comms": latest.get("comms", {}),
+            "gcs": latest.get("gcs"),
+            "geofence": latest.get("geofence"),
             "mission": latest.get("mission", {}),
             "events": latest.get("events", []),
             "causal": self._causal,

@@ -133,6 +133,8 @@ export default function Viewport({
 
   const rf = telemetry?.rf || {};
   const jamming = rf.jamming_active;
+  // Open by default only where there is room beside the operator panel
+  const [legendOpen, setLegendOpen] = useState(() => window.innerHeight > 1150);
 
   return (
     <div className="viewport">
@@ -200,8 +202,14 @@ export default function Viewport({
       </div>
 
       <div className="overlay overlay--br">
+        {!legendOpen ? (
+          <div className="legend">
+            <button className="legend__toggle" onClick={() => setLegendOpen(true)}>▸ Legend</button>
+          </div>
+        ) : (
         <div className="legend">
-          <div className="legend__title">Link quality</div>
+          <button className="legend__toggle" onClick={() => setLegendOpen(false)}>▾ Legend</button>
+          <div className="legend__title" style={{ marginTop: 6 }}>Link quality</div>
           <div className="legend__row">
             <i className="legend__swatch" style={{ background: '#0f8a5f' }} />
             <span>Good &gt; 85%</span>
@@ -225,20 +233,42 @@ export default function Viewport({
             <span>Relay</span>
           </div>
           <div className="legend__row">
-            <i className="legend__dot" style={{ background: '#8250df' }} />
-            <span>GCS relay</span>
+            <i className="legend__dot" style={{ background: '#6b7280' }} />
+            <span>Returning / on pad</span>
+          </div>
+          <div className="legend__row">
+            <i className="legend__dot" style={{ background: '#1d4ed8' }} />
+            <span>Ground control station</span>
+          </div>
+
+          <div className="legend__title" style={{ marginTop: 9 }}>Survey tasks</div>
+          <div className="legend__row">
+            <i className="legend__dot" style={{ background: '#dc2626' }} />
+            <span>Priority 1 · 2 · 3 (red · amber · yellow)</span>
+          </div>
+          <div className="legend__row">
+            <i className="legend__dot" style={{ background: '#2563eb' }} />
+            <span>Surveyed, data in transit</span>
+          </div>
+          <div className="legend__row">
+            <i className="legend__dot" style={{ background: '#0f8a5f' }} />
+            <span>Data delivered to GCS</span>
+          </div>
+          <div className="legend__row">
+            <i className="legend__dot" style={{ background: 'transparent', border: '1.5px dashed #f97316' }} />
+            <span>Geofence</span>
           </div>
 
           {jamming && (
             <>
-              <div className="legend__title" style={{ marginTop: 9 }}>Threat</div>
+              <div className="legend__title" style={{ marginTop: 9 }}>Communication outage</div>
               <div className="legend__row">
                 <i className="legend__dot" style={{ background: '#dc2626' }} />
-                <span>Jamming envelope</span>
+                <span>Interference zone</span>
               </div>
               <div className="legend__row">
                 <i className="legend__dot" style={{ background: 'transparent', border: '1.5px dashed #f59e0b' }} />
-                <span>Jammer position (swarm estimate)</span>
+                <span>Source (swarm estimate)</span>
               </div>
             </>
           )}
@@ -253,6 +283,7 @@ export default function Viewport({
             Drag to orbit · scroll to zoom
           </div>
         </div>
+        )}
       </div>
     </div>
   );

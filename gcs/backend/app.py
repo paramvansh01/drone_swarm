@@ -1,5 +1,5 @@
 """
-C-DAWN Ground Control Station — FastAPI backend.
+C-DAWN Ground Control Station (UAV-X) — FastAPI backend.
 
 Serves the operator dashboard, streams telemetry over WebSocket, accepts
 operator commands, and coordinates the three-laptop cluster.
@@ -25,7 +25,7 @@ from fastapi.staticfiles import StaticFiles
 
 logger = logging.getLogger("cdawn.gcs")
 
-app = FastAPI(title="C-DAWN GCS", version="2.0.0")
+app = FastAPI(title="C-DAWN GCS — UAV-X", version="3.0.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -302,6 +302,16 @@ async def get_benchmarks():
             "available": False,
             "hint": "Run: python -m bench.run_benchmarks",
         })
+    with open(path) as f:
+        return JSONResponse({"available": True, **json.load(f)})
+
+
+@app.get("/api/uavx_benchmarks")
+async def get_uavx_benchmarks():
+    """Mission-level results from `python -m bench.uavx_suite`, if it has run."""
+    path = Path("results/uavx_benchmarks.json")
+    if not path.exists():
+        return JSONResponse({"available": False, "hint": "Run: python -m bench.uavx_suite"})
     with open(path) as f:
         return JSONResponse({"available": True, **json.load(f)})
 
@@ -591,6 +601,19 @@ async def receive_result(request: Request):
 
 
 # --- subsystem detail -------------------------------------------------------
+
+@app.get("/api/summary")
+async def get_summary():
+    """The full mission metrics (challenge categories) and indicative scores."""
+    if demo_controller is None:
+        return JSONResponse(await asyncio.to_thread(_upstream, "/api/summary"))
+    from mission.metrics import MissionMetrics
+    with demo_controller._lock:
+        summary = demo_controller.summary(force=True)
+    return Response(content=dumps({"summary": summary,
+                                   "indicative_scores": MissionMetrics.indicative_scores(summary)}),
+                    media_type="application/json")
+
 
 @app.get("/api/causal")
 async def get_causal_state():

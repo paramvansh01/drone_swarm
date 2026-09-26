@@ -19,7 +19,6 @@ const ROLE_COLORS = {
   RELAY: 0x0f8a5f,
   GCS_RELAY: 0x8250df,
   STANDBY: 0x6b7280,
-  HOSTILE: 0xdc2626,
   KILLED: 0xb91c1c,
 };
 
@@ -256,11 +255,13 @@ export function createDrone(role = 'SCOUT', id = '') {
   group.update = (dt, state = {}, scale = 1) => {
     const data = group.userData;
     const dead = state.status === 'KILLED';
+    // On a GCS pad (charging or ready) the rotors are stopped too
+    const grounded = dead || ['CHARGING', 'READY', 'LANDED'].includes(state.status);
 
     // Rotor speed tracks commanded thrust; a dead aircraft windmills down.
     const hoverThrust = 1.9 * 9.81;
-    const thrustRatio = dead ? 0 : Math.min((state.thrust ?? hoverThrust) / hoverThrust, 2.0);
-    const targetSpin = dead ? 0 : 55 + thrustRatio * 45;
+    const thrustRatio = grounded ? 0 : Math.min((state.thrust ?? hoverThrust) / hoverThrust, 2.0);
+    const targetSpin = grounded ? 0 : 55 + thrustRatio * 45;
     data.spin += (targetSpin - data.spin) * Math.min(dt * 3.0, 1);
 
     data.rotors.forEach((rotor) => {
@@ -283,7 +284,8 @@ export function createDrone(role = 'SCOUT', id = '') {
     // The group is already scaled by `scale`; the sprite inherits it.
     data.strobe.scale.setScalar(3 + flash * 3);
 
-    const color = roleColor(data.role, state.status);
+    // Roles change in flight (scout -> relay -> standby); colour follows them
+    const color = roleColor(state.role ?? data.role, state.status);
     data.strobe.material.color.setHex(color);
     data.accent.color.setHex(color);
     data.accent.emissive.setHex(color);

@@ -93,16 +93,20 @@ class SCMAwareRouter:
         self,
         drones: dict,
         sim_time: float,
+        ground_id: Optional[str] = None,
+        force: bool = False,
     ) -> Dict[str, Dict[str, str]]:
         """
-        Compute optimal routes for all drone pairs.
+        Compute optimal routes for all node pairs.
 
-        Uses Dijkstra with SCM-aware link costs.
+        Uses Dijkstra with SCM-aware link costs. With `ground_id`, the fixed
+        ground station is a node too: every aircraft's `gcs_link` is an edge
+        to it, so routes to the GCS come out of the same computation.
 
         Returns:
             Routing table: {node_id: {destination: next_hop}}
         """
-        if sim_time - self._last_update_time < self.route_update_interval:
+        if not force and sim_time - self._last_update_time < self.route_update_interval - 1e-6:
             # Return cached routes
             return {
                 node: {dest: route[1] if len(route) > 1 else dest for dest, route in routes.items()}
@@ -112,9 +116,12 @@ class SCMAwareRouter:
         self._last_update_time = sim_time
 
         alive_ids = [d_id for d_id, d in drones.items() if d.is_alive]
+        if ground_id is not None:
+            alive_ids.append(ground_id)
         n = len(alive_ids)
 
         if n < 2:
+            self._route_cache = {}
             return {}
 
         # Build adjacency with SCM-aware costs
@@ -124,10 +131,19 @@ class SCMAwareRouter:
             if not drone.is_alive:
                 continue
             for neighbor_id, quality in drone.neighbors.items():
+                if neighbor_id not in drones or not drones[neighbor_id].is_alive:
+                    continue
                 link_id = f"{d_id}<->{neighbor_id}"
                 stability = self._link_stability.get(link_id, 0.8)
                 cost = self.compute_link_cost(quality, stability)
                 adjacency[d_id][neighbor_id] = cost
+            if ground_id is not None:
+                quality = float(getattr(drone, "gcs_link", 0.0))
+                if quality > 0.0:
+                    stability = self._link_stability.get(f"{d_id}<->{ground_id}", 0.8)
+                    cost = self.compute_link_cost(quality, stability)
+                    adjacency[d_id][ground_id] = cost
+                    adjacency[ground_id][d_id] = cost
 
         # Compute shortest paths for all pairs
         routing_table = {}

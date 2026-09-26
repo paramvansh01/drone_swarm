@@ -1,0 +1,599 @@
+{
+  "theatre": {
+    "id": "kedarnath",
+    "name": "Kedarnath",
+    "region": "Rudraprayag, Uttarakhand",
+    "lat": 30.72,
+    "lon": 79.068,
+    "description": "Mandakini valley below Kedarnath \u2014 site of the 2013 flash flood and debris flow. Narrow gorge, no ground access after the road washes out.",
+    "use_case": "Flood / landslide disaster response, survivor search",
+    "north_bearing_deg": 180.0,
+    "rotation_k": 1,
+    "sources": {
+      "elevation": "AWS Open Data Terrain Tiles (Terrarium; SRTM/Copernicus-derived)",
+      "imagery": "Sentinel-2 cloudless - https://s2maps.eu by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2016), CC BY 4.0",
+      "imagery_hr": "Esri World Imagery \u2014 Esri, Maxar, Earthstar Geographics, and the GIS User Community (local cache, not redistributed)"
+    },
+    "snow_line_m": 4400.0,
+    "size_m": 5120.0,
+    "inner_bounds": [
+      30.69700038667596,
+      30.74299412842638,
+      79.04124931181934,
+      79.09475068818057
+    ],
+    "context_bounds": [
+      30.558887658492484,
+      30.880843582327657,
+      78.88074518273555,
+      79.25525481726436
+    ]
+  },
+  "gcs": {
+    "id": "GCS",
+    "position": [
+      179.20000000000002,
+      3440.0,
+      2872.405244140625
+    ],
+    "mast_m": 10.0,
+    "pads": [
+      [
+        204.20000000000002,
+        3430.0,
+        2864.37732421875
+      ],
+      [
+        204.20000000000002,
+        3450.0,
+        2862.1602734374997
+      ],
+      [
+        220.20000000000002,
+        3430.0,
+        2865.86689453125
+      ],
+      [
+        220.20000000000002,
+        3450.0,
+        2864.54001953125
+      ],
+      [
+        236.20000000000002,
+        3430.0,
+        2868.4375195312496
+      ],
+      [
+        236.20000000000002,
+        3450.0,
+        2867.39818359375
+      ],
+      [
+        252.20000000000002,
+        3430.0,
+        2871.82458984375
+      ],
+      [
+        252.20000000000002,
+        3450.0,
+        2871.85669921875
+      ],
+      [
+        268.20000000000005,
+        3430.0,
+        2876.5809765625
+      ],
+      [
+        268.20000000000005,
+        3450.0,
+        2876.88296875
+      ],
+      [
+        284.20000000000005,
+        3430.0,
+        2883.526669921875
+      ],
+      [
+        284.20000000000005,
+        3450.0,
+        2884.4358007812502
+      ]
+    ]
+  },
+  "geofence": {
+    "polygon": [
+      [
+        40.0,
+        2790.0
+      ],
+      [
+        249.37391304347827,
+        2781.607453416149
+      ],
+      [
+        458.74782608695654,
+        2625.35900621118
+      ],
+      [
+        668.1217391304348,
+        2496.2509316770183
+      ],
+      [
+        877.4956521739131,
+        2439.286956521739
+      ],
+      [
+        1086.8695652173913,
+        2373.7515527950304
+      ],
+      [
+        1296.2434782608696,
+        2241.7913043478256
+      ],
+      [
+        1505.6173913043478,
+        2056.6136645962733
+      ],
+      [
+        1714.9913043478261,
+        1832.151552795031
+      ],
+      [
+        1924.3652173913044,
+        1730.0
+      ],
+      [
+        2133.7391304347825,
+        1730.0
+      ],
+      [
+        2343.113043478261,
+        1744.7304347826084
+      ],
+      [
+        2552.486956521739,
+        1776.4248447204968
+      ],
+      [
+        2761.8608695652174,
+        1844.8173913043483
+      ],
+      [
+        2971.2347826086957,
+        1889.9999999999995
+      ],
+      [
+        3180.608695652174,
+        1907.229813664596
+      ],
+      [
+        3389.9826086956523,
+        1909.9999999999995
+      ],
+      [
+        3599.3565217391306,
+        1909.9999999999995
+      ],
+      [
+        3808.730434782609,
+        1909.9999999999995
+      ],
+      [
+        4018.104347826087,
+        1909.9999999999995
+      ],
+      [
+        4227.478260869565,
+        1909.9999999999995
+      ],
+      [
+        4436.852173913044,
+        1909.9999999999995
+      ],
+      [
+        4646.226086956522,
+        1909.9999999999995
+      ],
+      [
+        4855.6,
+        1909.9999999999995
+      ],
+      [
+        4855.6,
+        3209.9999999999995
+      ],
+      [
+        4646.226086956522,
+        3209.9999999999995
+      ],
+      [
+        4436.852173913044,
+        3209.9999999999995
+      ],
+      [
+        4227.478260869565,
+        3209.9999999999995
+      ],
+      [
+        4018.104347826087,
+        3209.9999999999995
+      ],
+      [
+        3808.730434782609,
+        3209.9999999999995
+      ],
+      [
+        3599.3565217391306,
+        3209.9999999999995
+      ],
+      [
+        3389.9826086956523,
+        3209.9999999999995
+      ],
+      [
+        3180.608695652174,
+        3207.229813664596
+      ],
+      [
+        2971.2347826086957,
+        3189.9999999999995
+      ],
+      [
+        2761.8608695652174,
+        3144.8173913043483
+      ],
+      [
+        2552.486956521739,
+        3076.424844720497
+      ],
+      [
+        2343.113043478261,
+        3044.7304347826084
+      ],
+      [
+        2133.7391304347825,
+        3030.0
+      ],
+      [
+        1924.3652173913044,
+        3030.0
+      ],
+      [
+        1714.9913043478261,
+        3132.151552795031
+      ],
+      [
+        1505.6173913043478,
+        3356.6136645962733
+      ],
+      [
+        1296.2434782608696,
+        3541.7913043478256
+      ],
+      [
+        1086.8695652173913,
+        3673.7515527950304
+      ],
+      [
+        877.4956521739131,
+        3739.286956521739
+      ],
+      [
+        668.1217391304348,
+        3796.2509316770183
+      ],
+      [
+        458.74782608695654,
+        3925.35900621118
+      ],
+      [
+        249.37391304347827,
+        4081.607453416149
+      ],
+      [
+        40.0,
+        4090.0
+      ]
+    ],
+    "max_agl": 400.0
+  },
+  "time_limit_s": 900.0,
+  "tasks": [
+    {
+      "id": "POI-001",
+      "position": [
+        750.08,
+        3169.9885714285706,
+        3017.0513649107143
+      ],
+      "category": "blocked_road",
+      "priority": 2,
+      "surveyed": true,
+      "surveyed_by": "UAV-5",
+      "surveyed_at": 58.40000000000353,
+      "release_time": 0.0,
+      "emergent": false,
+      "region": null,
+      "delivered": true,
+      "delivered_at": 59.005600000003625
+    },
+    {
+      "id": "POI-002",
+      "position": [
+        1083.904,
+        2964.5988571428566,
+        3092.5491266857143
+      ],
+      "category": "trapped_survivors",
+      "priority": 1,
+      "surveyed": true,
+      "surveyed_by": "UAV-2",
+      "surveyed_at": 63.86000000000438,
+      "release_time": 0.0,
+      "emergent": false,
+      "region": null,
+      "delivered": true,
+      "delivered_at": 64.40560000000433
+    },
+    {
+      "id": "POI-003",
+      "position": [
+        1417.728,
+        2811.9474285714286,
+        3142.145741801518
+      ],
+      "category": "damaged_bridge",
+      "priority": 3,
+      "surveyed": true,
+      "surveyed_by": "UAV-2",
+      "surveyed_at": 90.25999999999918,
+      "release_time": 0.0,
+      "emergent": false,
+      "region": null,
+      "delivered": true,
+      "delivered_at": 90.80559999999907
+    },
+    {
+      "id": "POI-004",
+      "position": [
+        1709.824,
+        2447.318857142857,
+        3217.5175027194646
+      ],
+      "category": "landslide_debris",
+      "priority": 2,
+      "surveyed": true,
+      "surveyed_by": "UAV-6",
+      "surveyed_at": 117.2799999999938,
+      "release_time": 0.0,
+      "emergent": false,
+      "region": null,
+      "delivered": true,
+      "delivered_at": 117.8111999999937
+    },
+    {
+      "id": "POI-005",
+      "position": [
+        2001.92,
+        2440.0,
+        3326.143953125
+      ],
+      "category": "collapsed_building",
+      "priority": 1,
+      "surveyed": true,
+      "surveyed_by": "UAV-3",
+      "surveyed_at": 121.11999999999304,
+      "release_time": 0.0,
+      "emergent": false,
+      "region": null,
+      "delivered": true,
+      "delivered_at": 121.70559999999293
+    },
+    {
+      "id": "POI-006",
+      "position": [
+        2294.016,
+        2357.716571428571,
+        3341.842714050804
+      ],
+      "category": "flooded_area",
+      "priority": 3,
+      "surveyed": true,
+      "surveyed_by": "UAV-5",
+      "surveyed_at": 204.96000000003104,
+      "release_time": 0.0,
+      "emergent": false,
+      "region": null,
+      "delivered": true,
+      "delivered_at": 205.51120000003132
+    },
+    {
+      "id": "POI-007",
+      "position": [
+        2586.1120000000005,
+        2458.8891428571433,
+        3390.6605316675896
+      ],
+      "category": "landslide_debris",
+      "priority": 2,
+      "surveyed": true,
+      "surveyed_by": "UAV-5",
+      "surveyed_at": 166.7400000000115,
+      "release_time": 0.0,
+      "emergent": false,
+      "region": null,
+      "delivered": true,
+      "delivered_at": 167.31120000001178
+    },
+    {
+      "id": "POI-008",
+      "position": [
+        2878.208,
+        2483.773714285714,
+        3434.065404777322
+      ],
+      "category": "trapped_survivors",
+      "priority": 1,
+      "surveyed": true,
+      "surveyed_by": "UAV-4",
+      "surveyed_at": 166.82000000001153,
+      "release_time": 0.0,
+      "emergent": false,
+      "region": null,
+      "delivered": true,
+      "delivered_at": 167.41120000001183
+    },
+    {
+      "id": "POI-009",
+      "position": [
+        3170.3040000000005,
+        2595.757714285714,
+        3454.7792605498207
+      ],
+      "category": "blocked_road",
+      "priority": 3,
+      "surveyed": true,
+      "surveyed_by": "UAV-3",
+      "surveyed_at": 189.58000000002318,
+      "release_time": 0.0,
+      "emergent": false,
+      "region": null,
+      "delivered": true,
+      "delivered_at": 190.11120000002344
+    },
+    {
+      "id": "POI-010",
+      "position": [
+        3420.6720000000005,
+        2539.9999999999995,
+        3480.37053125
+      ],
+      "category": "collapsed_building",
+      "priority": 2,
+      "surveyed": true,
+      "surveyed_by": "UAV-2",
+      "surveyed_at": 203.22000000003015,
+      "release_time": 0.0,
+      "emergent": false,
+      "region": null,
+      "delivered": true,
+      "delivered_at": 203.81120000003045
+    },
+    {
+      "id": "POI-011",
+      "position": [
+        2711.2960000000003,
+        2540.3702857142857,
+        3417.885632390268
+      ],
+      "category": "trapped_survivors",
+      "priority": 1,
+      "surveyed": true,
+      "surveyed_by": "UAV-3",
+      "surveyed_at": 391.379999999934,
+      "release_time": 329.9999999999898,
+      "emergent": true,
+      "region": "REGION-1",
+      "delivered": true,
+      "delivered_at": 391.9111999999335
+    },
+    {
+      "id": "POI-012",
+      "position": [
+        2762.2076882454317,
+        2591.281973959717,
+        3454.918169349984
+      ],
+      "category": "trapped_survivors",
+      "priority": 1,
+      "surveyed": true,
+      "surveyed_by": "UAV-2",
+      "surveyed_at": 394.19999999993144,
+      "release_time": 329.9999999999898,
+      "emergent": true,
+      "region": "REGION-1",
+      "delivered": true,
+      "delivered_at": 394.81119999993086
+    },
+    {
+      "id": "POI-013",
+      "position": [
+        2660.384311754569,
+        2591.281973959717,
+        3445.532150536432
+      ],
+      "category": "trapped_survivors",
+      "priority": 1,
+      "surveyed": true,
+      "surveyed_by": "UAV-4",
+      "surveyed_at": 381.8999999999426,
+      "release_time": 329.9999999999898,
+      "emergent": true,
+      "region": "REGION-1",
+      "delivered": true,
+      "delivered_at": 382.51119999994205
+    },
+    {
+      "id": "POI-014",
+      "position": [
+        2660.384311754569,
+        2489.4585974688544,
+        3395.1468693148554
+      ],
+      "category": "trapped_survivors",
+      "priority": 1,
+      "surveyed": true,
+      "surveyed_by": "UAV-2",
+      "surveyed_at": 363.17999999995965,
+      "release_time": 329.9999999999898,
+      "emergent": true,
+      "region": "REGION-1",
+      "delivered": true,
+      "delivered_at": 363.71119999995915
+    },
+    {
+      "id": "POI-015",
+      "position": [
+        2762.2076882454317,
+        2489.4585974688544,
+        3409.7172067737665
+      ],
+      "category": "trapped_survivors",
+      "priority": 1,
+      "surveyed": true,
+      "surveyed_by": "UAV-2",
+      "surveyed_at": 377.55999999994657,
+      "release_time": 329.9999999999898,
+      "emergent": true,
+      "region": "REGION-1",
+      "delivered": true,
+      "delivered_at": 378.11119999994605
+    },
+    {
+      "id": "POI-016",
+      "position": [
+        1584.6399999999999,
+        2693.2685714285712,
+        3198.903107647321
+      ],
+      "category": "trapped_survivors",
+      "priority": 1,
+      "surveyed": false,
+      "surveyed_by": null,
+      "surveyed_at": null,
+      "release_time": 599.9999999997443,
+      "emergent": true,
+      "region": null,
+      "delivered": false,
+      "delivered_at": null
+    }
+  ],
+  "fleet": [
+    "UAV-1",
+    "UAV-2",
+    "UAV-3",
+    "UAV-4",
+    "UAV-5",
+    "UAV-6"
+  ]
+}

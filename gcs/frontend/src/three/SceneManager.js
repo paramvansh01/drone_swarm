@@ -130,15 +130,15 @@ export default class SceneManager {
     this.halo.visible = false;
     this.scene.add(this.halo);
 
-    this.jammers = new Map();
-    this.interceptors = new Map();   // id -> { model, trail, state, receivedAt }
-    this.enemies = new Map();        // hostile UAVs
+    this.jammers = new Map();         // RF interference sources
     this.stormCells = new Map();
     this.denialZones = new Map();
     this.rain = null;
-    this.effects = [];               // strike flashes and smoke
-    this._seenStrikes = new Set();
+    this.effects = [];
     this.targets = new Map();
+    this.gcsModel = null;             // ground control station + landing pads
+    this.geofenceLine = null;
+    this._geofenceKey = null;
   }
 
   _initJammingDome() {
@@ -376,11 +376,11 @@ export default class SceneManager {
     this.tool = tool;
     if (!this.cursor) return;
     const colors = {
-      add_scout: 0x0b6bcb, add_relay: 0x0f8a5f, add_poi: 0xb45309,
-      add_jammer: 0xdc2626, goto: 0x7c3aed,
+      add_scout: 0x0b6bcb, add_relay: 0x0f8a5f, add_poi: 0xdc2626,
+      add_jammer: 0x9333ea, add_interference: 0x9333ea, goto: 0x7c3aed,
     };
     this.cursor.material.color.setHex(colors[tool] ?? 0x1549c9);
-    const radius = tool === 'add_jammer' ? 3.2 : 1;
+    const radius = (tool === 'add_jammer' || tool === 'add_interference') ? 3.2 : 1;
     this.cursor.scale.setScalar(radius);
     if (tool === 'select') this.cursor.visible = false;
   }
@@ -475,15 +475,14 @@ export default class SceneManager {
     for (const [, marker] of (this.ewMarkers || [])) this.scene.remove(marker.group);
     this.ewMarkers = new Map();
     this.ewMarker = null;
-    for (const [, entry] of this.interceptors) this.scene.remove(entry.model, entry.trail);
     if (this.cloudDeck) { this.scene.remove(this.cloudDeck); this.cloudDeck = null; }
-    for (const [, entry] of this.enemies) this.scene.remove(entry.model, entry.trail);
-    this.enemies.clear();
     for (const [, z] of this.stormCells) this.scene.remove(z.group);
     this.stormCells.clear();
     for (const [, z] of this.denialZones) this.scene.remove(z.group);
     this.denialZones.clear();
-    this.interceptors.clear();
+    if (this.gcsModel) { this.scene.remove(this.gcsModel); this.gcsModel = null; }
+    if (this.geofenceLine) { this.scene.remove(this.geofenceLine); this.geofenceLine = null; }
+    this._geofenceKey = null;
     this.effects.forEach((fx) => this.scene.remove(fx.flash, fx.smoke, fx.light));
     this.effects = [];
     for (const [, t] of this.targets) this.scene.remove(t.line, t.marker);
@@ -550,77 +549,105 @@ export default class SceneManager {
     this.telemetry = data;
     if (!this.ready || !data) return;
 
-    this._syncDrones(data.drones || {});
+    this._syncGcs(data.gcs);
+    this._syncGeofence(data.geofence);
+    this._syncDrones(data.drones || {}, data.gcs);
     this._syncPois(data.pois || []);
     this._syncTargets(data.drones || {});
     this._syncJamming(data);
-    this._syncInterceptors(data.interceptors || []);
     this._syncInjects(data.injects || {});
-    this._checkStrikes(data.events || []);
     this._checkEvents(data.events || []);
   }
 
-  // -- interceptors ----------------------------------------------------------
+  // -- ground control station and geofence ------------------------------------
 
-  _createInterceptorModel() {
-    // A small fixed-wing loitering munition, built along +Z so lookAt()
-    // points it down its velocity vector.
+  _syncGcs(gcs) {
+    if (!gcs || this.gcsModel) return;
     const group = new THREE.Group();
-    const body = new THREE.MeshStandardMaterial({ color: 0x3d4636, roughness: 0.55, metalness: 0.3 });
-    const fuselage = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.2, 2.2, 10), body);
-    fuselage.rotation.x = Math.PI / 2;
-    const nose = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.5, 10), body);
-    nose.rotation.x = Math.PI / 2;
-    nose.position.z = 1.35;
-    const wing = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.04, 0.34), body);
-    wing.position.z = 0.25;
-    const tail = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.04, 0.22), body);
-    tail.position.z = -0.95;
-    const fin = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.45, 0.25), body);
-    fin.position.set(0, 0.22, -0.95);
-    const strobe = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6),
-      new THREE.MeshBasicMaterial({ color: 0xff3b30 }));
-    strobe.position.set(0, 0.28, -0.95);
-    const inner = new THREE.Group();
-    inner.add(fuselage, nose, wing, tail, fin, strobe);
-    group.add(inner);
-    group.userData.strobe = strobe;
-    return group;
+    const antenna = toScene(gcs.position);
+    const mastHeight = gcs.mast_m || 10;
+    const base = antenna.clone().setY(antenna.y - mastHeight);
+
+    // Shelter, mast, antenna and a beacon visible from the whole valley
+    const shelter = new THREE.Mesh(
+      new THREE.BoxGeometry(9, 4, 6),
+      new THREE.MeshStandardMaterial({ color: 0xe8e4d8, roughness: 0.7 }),
+    );
+    shelter.position.copy(base).add(new THREE.Vector3(-8, 2, 0));
+    const roof = new THREE.Mesh(
+      new THREE.BoxGeometry(9.6, 0.5, 6.6),
+      new THREE.MeshStandardMaterial({ color: 0x1d4ed8, roughness: 0.6 }),
+    );
+    roof.position.copy(shelter.position).add(new THREE.Vector3(0, 2.2, 0));
+    const mast = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.35, 0.5, mastHeight, 8),
+      new THREE.MeshStandardMaterial({ color: 0x9ca3af, metalness: 0.5, roughness: 0.4 }),
+    );
+    mast.position.copy(base).add(new THREE.Vector3(0, mastHeight / 2, 0));
+    const dish = new THREE.Mesh(
+      new THREE.SphereGeometry(1.4, 16, 12),
+      new THREE.MeshBasicMaterial({ color: 0x1d4ed8 }),
+    );
+    dish.position.copy(antenna);
+    const beacon = new THREE.Mesh(
+      new THREE.CylinderGeometry(2.2, 2.2, 140, 10, 1, true),
+      new THREE.MeshBasicMaterial({
+        color: 0x1d4ed8, transparent: true, opacity: 0.16, depthWrite: false, side: THREE.DoubleSide,
+      }),
+    );
+    beacon.position.copy(antenna).add(new THREE.Vector3(0, 70, 0));
+    group.add(shelter, roof, mast, dish, beacon);
+
+    // Landing / charging pads
+    (gcs.pads || []).forEach((pad) => {
+      const disc = new THREE.Mesh(
+        new THREE.CircleGeometry(3.2, 24),
+        new THREE.MeshBasicMaterial({ color: 0x1f2937, side: THREE.DoubleSide }),
+      );
+      disc.rotation.x = -Math.PI / 2;
+      disc.position.copy(toScene(pad)).add(new THREE.Vector3(0, 0.15, 0));
+      const ring = new THREE.Mesh(
+        new THREE.RingGeometry(2.4, 2.9, 24),
+        new THREE.MeshBasicMaterial({ color: 0xfacc15, side: THREE.DoubleSide }),
+      );
+      ring.rotation.x = -Math.PI / 2;
+      ring.position.copy(disc.position).add(new THREE.Vector3(0, 0.05, 0));
+      group.add(disc, ring);
+    });
+    this.gcsModel = group;
+    this.gcsAntenna = antenna;
+    this.scene.add(group);
   }
 
-  _syncInterceptors(list) {
-    const seen = new Set();
-    const now = performance.now();
-    list.forEach((state) => {
-      seen.add(state.id);
-      let entry = this.interceptors.get(state.id);
-      if (!entry) {
-        const model = this._createInterceptorModel();
-        const trail = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({
-          color: 0xb45309, transparent: true, opacity: 0.75,
-        }));
-        trail.frustumCulled = false;
-        this.scene.add(model, trail);
-        entry = { model, trail, trailLen: 0 };
-        this.interceptors.set(state.id, entry);
-        model.position.copy(toScene(state.position));
-      }
-      entry.state = state;
-      entry.target = toScene(state.position);
-      entry.receivedAt = now;
-      entry.model.visible = !state.done;
-      if (state.trail.length !== entry.trailLen) {
-        entry.trailLen = state.trail.length;
-        entry.trail.geometry.setFromPoints(state.trail.map(toScene));
-      }
-    });
-    for (const [id, entry] of this.interceptors) {
-      if (!seen.has(id)) {
-        this.scene.remove(entry.model, entry.trail);
-        entry.trail.geometry.dispose();
-        this.interceptors.delete(id);
+  _syncGeofence(fence) {
+    if (!fence?.polygon?.length || !this.terrainLookup) return;
+    const key = JSON.stringify(fence.polygon);
+    if (key === this._geofenceKey) return;
+    this._geofenceKey = key;
+    if (this.geofenceLine) this.scene.remove(this.geofenceLine);
+
+    // Drape the fence on the terrain, densified so it follows the relief
+    const pts = [];
+    const poly = fence.polygon;
+    for (let i = 0; i < poly.length; i += 1) {
+      const [x0, y0] = poly[i];
+      const [x1, y1] = poly[(i + 1) % poly.length];
+      const steps = Math.max(1, Math.ceil(Math.hypot(x1 - x0, y1 - y0) / 40));
+      for (let k = 0; k < steps; k += 1) {
+        const x = x0 + ((x1 - x0) * k) / steps;
+        const y = y0 + ((y1 - y0) * k) / steps;
+        pts.push(new THREE.Vector3(x, this.terrainLookup.heightAt(x, y) + 12, y));
       }
     }
+    pts.push(pts[0].clone());
+    const line = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints(pts),
+      new THREE.LineDashedMaterial({ color: 0xf97316, dashSize: 28, gapSize: 16, transparent: true, opacity: 0.9 }),
+    );
+    line.computeLineDistances();
+    line.frustumCulled = false;
+    this.geofenceLine = line;
+    this.scene.add(line);
   }
 
   // -- live-mission injects ---------------------------------------------------
@@ -628,7 +655,6 @@ export default class SceneManager {
   _syncInjects(injects) {
     this._setRain(injects.rain_mm_h || 0);
     this._cloudBase = injects.cloud_base_agl || 0;
-    this._syncEnemies(injects.enemies || []);
     this._syncZones(this.stormCells, injects.cells || [], (z) => this._makeStormCell(z));
     this._syncZones(this.denialZones, injects.gps_denial || [], (z) => this._makeDenialZone(z));
   }
@@ -716,47 +742,6 @@ export default class SceneManager {
     return { group };
   }
 
-  _syncEnemies(list) {
-    const seen = new Set();
-    const now = performance.now();
-    list.forEach((state) => {
-      seen.add(state.id);
-      let entry = this.enemies.get(state.id);
-      if (!entry) {
-        const model = createDrone('HOSTILE', state.id);
-        const trail = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({
-          color: 0xdc2626, transparent: true, opacity: 0.6,
-        }));
-        trail.frustumCulled = false;
-        this.scene.add(model, trail);
-        entry = { model, trail, trailLen: 0 };
-        this.enemies.set(state.id, entry);
-        model.position.copy(toScene(state.position));
-      }
-      entry.state = state;
-      entry.target = toScene(state.position);
-      entry.receivedAt = now;
-      if (state.trail.length !== entry.trailLen) {
-        entry.trailLen = state.trail.length;
-        entry.trail.geometry.setFromPoints(state.trail.map(toScene));
-      }
-    });
-    for (const [id, entry] of this.enemies) {
-      if (!seen.has(id)) {
-        this._spawnStrike(entry.model.position.clone());
-        this.scene.remove(entry.model, entry.trail);
-        entry.trail.geometry.dispose();
-        this.enemies.delete(id);
-      }
-    }
-  }
-
-  /**
-   * Rain: a box of falling streaks that travels with the camera, slanted by
-   * the wind. The sky and the terrain fog thicken with the rain rate, which
-   * is what actually sells it — particles alone read as confetti.
-   */
-  /** Cloud deck the swarm has to stay under — the reason it descends. */
   _setCloudDeck(agl) {
     if (!agl || !this.terrainMesh) {
       if (this.cloudDeck) this.cloudDeck.visible = false;
@@ -871,36 +856,6 @@ export default class SceneManager {
     points.geometry.attributes.position.needsUpdate = true;
   }
 
-  _checkStrikes(events) {
-    events.forEach((e) => {
-      if (e.type !== 'JAMMER_DESTROYED') return;
-      const key = `${e.time}-${e.params?.jammer_id}`;
-      if (this._seenStrikes.has(key)) return;
-      this._seenStrikes.add(key);
-      if (e.params?.position) this._spawnStrike(toScene(e.params.position));
-    });
-  }
-
-  _spawnStrike(point) {
-    const flash = new THREE.Mesh(
-      new THREE.SphereGeometry(1, 24, 16),
-      new THREE.MeshBasicMaterial({ color: 0xffb347, transparent: true, opacity: 1, depthWrite: false,
-        blending: THREE.AdditiveBlending }),
-    );
-    flash.position.copy(point);
-    const smoke = new THREE.Mesh(
-      new THREE.SphereGeometry(1, 16, 12),
-      new THREE.MeshBasicMaterial({ color: 0x2b2b2b, transparent: true, opacity: 0.55, depthWrite: false }),
-    );
-    smoke.position.copy(point);
-    const light = new THREE.PointLight(0xffa040, 40, 600, 1.2);
-    light.position.copy(point).add(new THREE.Vector3(0, 10, 0));
-    this.scene.add(flash, smoke, light);
-    this.effects.push({ flash, smoke, light, age: 0 });
-    this._strikePoint = point.clone();
-    this._strikeUntil = performance.now() + 8000;
-  }
-
   _updateEffects(dt) {
     this.effects = this.effects.filter((fx) => {
       fx.age += dt;
@@ -921,7 +876,7 @@ export default class SceneManager {
     });
   }
 
-  _syncDrones(drones) {
+  _syncDrones(drones, gcs) {
     const seen = new Set();
 
     Object.entries(drones).forEach(([id, state]) => {
@@ -952,19 +907,23 @@ export default class SceneManager {
       }
     }
 
-    this._syncLinks(drones);
+    this._syncLinks(drones, gcs);
   }
 
-  _syncLinks(drones) {
+  _syncLinks(drones, gcs) {
     const wanted = new Set();
+    const airborne = (d) => d && !['KILLED', 'CHARGING', 'READY', 'LANDED'].includes(d.status);
 
     Object.entries(drones).forEach(([id1, d1]) => {
-      if (d1.status === 'KILLED') return;
-      Object.entries(d1.neighbors || {}).forEach(([id2, quality]) => {
+      if (!airborne(d1)) return;
+      const edges = Object.entries(d1.neighbors || {});
+      if (gcs && d1.gcs_link > 0) edges.push([gcs.id || 'GCS', d1.gcs_link]);
+      edges.forEach(([id2, quality]) => {
+        const toGcs = gcs && id2 === (gcs.id || 'GCS');
         // One line per unordered pair
-        if (id1 >= id2) return;
-        const other = drones[id2];
-        if (!other || other.status === 'KILLED') return;
+        if (!toGcs && id1 >= id2) return;
+        const other = toGcs ? { position: gcs.position } : drones[id2];
+        if (!toGcs && !airborne(other)) return;
         // Below this the link carries nothing; drawing it implies a
         // connection that does not exist.
         if (quality < 0.04) return;
@@ -1000,7 +959,7 @@ export default class SceneManager {
         const color = quality > 0.85 ? LINK_GOOD
           : quality > 0.5 ? LINK_FAIR : LINK_POOR;
         link.material.color.copy(color);
-        link.material.opacity = 0.22 + quality * 0.62;
+        link.material.opacity = (toGcs ? 0.35 : 0.22) + quality * 0.62;
       });
     });
 
@@ -1058,11 +1017,16 @@ export default class SceneManager {
         this.poiMarkers.set(poi.id, marker);
       }
 
-      // Surveyed targets turn green and drop their beacon
-      const color = poi.surveyed ? 0x0f8a5f : 0xb45309;
+      // Pending targets are coloured by priority (P1 red, P2 amber, P3
+      // yellow); surveyed turns blue until its data reaches the GCS, then
+      // green with the beacon dropped.
+      const pending = { 1: 0xdc2626, 2: 0xd97706, 3: 0xca8a04 }[poi.priority] ?? 0xd97706;
+      const color = poi.delivered ? 0x0f8a5f : poi.surveyed ? 0x2563eb : pending;
       marker.ring.material.color.setHex(color);
       marker.beam.material.color.setHex(color);
-      marker.beam.material.opacity = poi.surveyed ? 0.10 : 0.28;
+      marker.beam.material.opacity = poi.delivered ? 0.08 : poi.surveyed ? 0.16 : 0.3;
+      const pulse = poi.emergent && !poi.surveyed;
+      marker.ring.scale.setScalar(pulse ? 1 + 0.25 * Math.sin(performance.now() / 160) : 1);
     });
   }
 
@@ -1341,36 +1305,7 @@ export default class SceneManager {
       model.update(dt, entry.state || {}, scale);
     }
 
-    // Interceptors: extrapolate along velocity between 20 Hz packets (at
-    // 55 m/s a plain lerp would trail the real position by tens of metres)
     const subjects = { ...(data?.drones || {}) };
-    const nowMs = performance.now();
-    for (const [id, entry] of this.interceptors) {
-      if (!entry.state || entry.state.done) continue;
-      const v = entry.state.velocity;
-      const ahead = Math.min((nowMs - entry.receivedAt) / 1000, 0.12);
-      const predicted = entry.target.clone().add(new THREE.Vector3(v[0], v[2], v[1]).multiplyScalar(ahead));
-      entry.model.position.lerp(predicted, 1 - Math.exp(-20 * dt));
-      const dir = new THREE.Vector3(v[0], v[2], v[1]);
-      if (dir.lengthSq() > 1) entry.model.lookAt(entry.model.position.clone().add(dir));
-      const distance = this.camera.position.distanceTo(entry.model.position);
-      entry.model.scale.setScalar(THREE.MathUtils.clamp(distance / 120, 1, 14) * 1.6);
-      entry.model.userData.strobe.visible = Math.floor(nowMs / 250) % 2 === 0;
-      const p = entry.model.position;
-      subjects[id] = { position: [p.x, p.z, p.y], velocity: v, role: 'INTERCEPTOR', status: 'ACTIVE' };
-    }
-    // Hostile UAVs move as fast as our own aircraft: extrapolate between packets
-    for (const [, entry] of this.enemies) {
-      if (!entry.state) continue;
-      const v = entry.state.velocity;
-      const ahead = Math.min((nowMs - entry.receivedAt) / 1000, 0.12);
-      const predicted = entry.target.clone().add(new THREE.Vector3(v[0], v[2], v[1]).multiplyScalar(ahead));
-      entry.model.position.lerp(predicted, 1 - Math.exp(-16 * dt));
-      entry.model.rotation.y = -(entry.state.heading ?? 0);
-      const distance = this.camera.position.distanceTo(entry.model.position);
-      entry.model.update?.(dt, { status: 'ACTIVE' },
-        THREE.MathUtils.clamp(distance / 200, 1, 10));
-    }
     for (const [, cell] of this.stormCells) {
       const streaks = cell.group.userData.streaks;
       if (streaks) streaks.position.y = (streaks.position.y - dt * 26 + 1400) % 1400 - 700;
@@ -1378,10 +1313,6 @@ export default class SceneManager {
     this._updateRain(dt);
     this._setCloudDeck(this._cloudBase);
     this._updateEffects(dt);
-    if (this._strikePoint && nowMs < this._strikeUntil) {
-      const p = this._strikePoint;
-      subjects.STRIKE = { position: [p.x, p.z, p.y], velocity: [0, 0, 0], role: 'INTERCEPTOR', status: 'ACTIVE' };
-    }
 
     if (this.director) {
       this.director.update(dt, subjects, data?.pois || [], null);

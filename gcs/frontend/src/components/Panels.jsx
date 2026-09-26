@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 
 /**
- * Operator panels for the C-DAWN GCS.
+ * Operator panels for the C-DAWN GCS (UAV-X disaster response).
  *
- * Written for a defence operator rather than for the engineer who built the
+ * Written for a disaster-response operator rather than for the engineer who built the
  * system: every panel leads with what is happening and what the autonomy is
  * doing about it, and keeps the underlying model parameters available but
  * subordinate. Where a number could be misread as a guarantee (a causal
@@ -29,6 +29,7 @@ export function SituationBanner({ telemetry }) {
   const phase = metrics.current_phase ?? 0;
   const jamming = rf.jamming_active;
   const backhaul = (metrics.backhaul_pdr ?? 1) * 100;
+  const mission = telemetry?.mission || demo?.mission || {};
 
   let tone = 'info';
   if (jamming || backhaul < 60) tone = 'alert';
@@ -39,8 +40,16 @@ export function SituationBanner({ telemetry }) {
 
   const latest = causal?.interventions?.latest;
   const ew = rf.ew;
-  if (ew?.active && ew.summary) {
-    action = `EW response — ${ew.summary}`;
+  const handovers = Object.entries(mission.roles?.handovers || {});
+  if (mission.phase === 'PLANNING') {
+    action = `Fleet on the pads. Relay chain planned for ${mission.roles?.relays_needed ?? '—'} relay(s); `
+      + 'launch the mission to begin.';
+  } else if (ew?.active && ew.summary) {
+    action = `Interference response — ${ew.summary}`;
+  } else if (handovers.length) {
+    const [from, h] = handovers[0];
+    action = `Relay handover: ${h.to} is flying out to take ${from}'s station before ${from} `
+      + 'returns to recharge — the chain stays closed throughout.';
   } else if (latest && latest.phase === 'complete') {
     if (latest.confounded) {
       action = `Causal test ${latest.id} on ${latest.link_id} was inconclusive — `
@@ -51,7 +60,7 @@ export function SituationBanner({ telemetry }) {
         + `${fmt(latest.causal_effect * 100, 0)} points. Holding the new altitude.`;
     } else if (latest.attribution === 'not_terrain') {
       action = `Ruled OUT terrain on ${latest.link_id}: altitude made no difference, `
-        + 'so the loss is hostile or range-limited. Rerouting instead of climbing.';
+        + 'so the loss is interference or range. Rerouting instead of climbing.';
     } else if (latest.attribution === 'partial_terrain') {
       action = `Terrain is a partial cause on ${latest.link_id}. `
         + 'Requesting relay repositioning rather than altitude alone.';
@@ -59,14 +68,16 @@ export function SituationBanner({ telemetry }) {
   } else if (causal?.interventions?.active_count > 0) {
     const active = causal.interventions.active?.[0];
     action = `Running a controlled altitude test on ${active?.link_id ?? 'a degraded link'} `
-      + 'to establish whether the cause is terrain or hostile action.';
+      + 'to establish whether the cause is terrain or interference.';
   }
 
   return (
     <div className={`situation ${tone}`}>
       <div className="situation__head">
         <span className="situation__tag">
-          {phase > 0 ? `Phase ${phase}` : (demo?.mode === 'interactive' ? 'Live' : 'Standby')}
+          {mission.phase === 'LIVE'
+            ? (mission.remaining_s != null ? `${Math.max(0, Math.floor(mission.remaining_s / 60))}:${String(Math.max(0, Math.floor(mission.remaining_s % 60))).padStart(2, '0')} left` : 'Live')
+            : (mission.phase || 'Standby')}
         </span>
         <span className="situation__title">
           {demo?.phase_name || 'Awaiting mission start'}
@@ -88,25 +99,42 @@ export function SituationBanner({ telemetry }) {
 
 export function SwarmPanel({ telemetry, onSelect, run, selectedId }) {
   const drones = Object.values(telemetry?.drones || {});
-  const alive = drones.filter((d) => d.status !== 'KILLED').length;
+  const ground = ['KILLED', 'CHARGING', 'READY', 'LANDED'];
+  const alive = drones.filter((d) => !ground.includes(d.status)).length;
+  const onPad = drones.filter((d) => ['CHARGING', 'READY'].includes(d.status)).length;
 
   const badgeClass = (d) => {
     if (d.status === 'KILLED') return 'dead';
     if (d.role === 'SCOUT') return 'scout';
-    if (d.role === 'GCS_RELAY') return 'gcs';
-    return 'relay';
+    if (d.role === 'RELAY') return 'relay';
+    return 'gcs';
   };
 
-  const shortRole = (role) => ({
-    SCOUT: 'SCT', RELAY: 'RLY', GCS_RELAY: 'GCS', STANDBY: 'STB',
-  }[role] ?? '—');
+  const shortRole = (d) => (d.status === 'CHARGING' ? 'CHG' : d.status === 'READY' ? 'RDY' : ({
+    SCOUT: 'SCT', RELAY: 'RLY', STANDBY: d.status === 'RETURNING' ? 'RTH' : 'STB',
+  }[d.role] ?? '—'));
+
+  const describe = (d) => {
+    if (d.status === 'KILLED') return 'FAILED';
+    if (d.status === 'CHARGING') return `on pad · recharging ${fmt(d.battery, 0)}%`;
+    if (d.status === 'READY') return 'on pad · charged, ready to launch';
+    const link = !d.radio_ok ? 'radio out' : d.connected ? `${d.hops} hop${d.hops === 1 ? '' : 's'} to GCS` : 'NO LINK';
+    const what = d.status === 'RETURNING' ? 'returning to GCS'
+      : d.handover_to ? `handing station to ${d.handover_to}`
+      : d.ew_hold ? 'withdrawn to regain link'
+      : d.manual_target ? 'operator order'
+      : d.role === 'RELAY' ? 'relay station'
+      : (d.assigned_poi || 'standing by');
+    const backlog = d.data_backlog ? ` · ${d.data_backlog} chunks queued` : '';
+    return `${what} · ${link}${backlog}`;
+  };
 
   return (
     <div className="panel">
       <div className="panel__head">
         <span className="panel__title">Swarm</span>
         <span className={`panel__badge ${alive === drones.length ? 'ok' : 'bad'}`}>
-          {alive}/{drones.length} AIRBORNE
+          {alive} UP · {onPad} ON PAD
         </span>
       </div>
       <div className="panel__body tight">
@@ -119,30 +147,29 @@ export function SwarmPanel({ telemetry, onSelect, run, selectedId }) {
           return (
             <div
               key={d.id}
-              className={`aircraft ${d.status === 'KILLED' ? 'dead' : ''} ${d.id === selectedId ? 'selected' : ''}`}
+              className={`aircraft ${ground.includes(d.status) ? 'dead' : ''} ${d.id === selectedId ? 'selected' : ''}`}
               onClick={() => onSelect?.(d.id)}
               title="Click to select this aircraft and frame it in the 3D view"
             >
               <div className={`aircraft__badge ${badgeClass(d)}`}>
-                {shortRole(d.role)}
+                {shortRole(d)}
               </div>
               <div>
                 <div className="aircraft__id">{d.id}</div>
-                <div className="aircraft__meta">
-                  {d.status === 'KILLED' ? 'NODE DOWN'
-                    : d.ew_hold ? `${fmt(d.speed, 1)} m/s · EW withdrawal`
-                    : d.manual_target ? `${fmt(d.speed, 1)} m/s · operator order`
-                      : `${fmt(d.speed, 1)} m/s · ${d.assigned_poi || 'station keeping'}`}
+                <div className={`aircraft__meta ${!ground.includes(d.status) && !d.connected ? 'bad-text' : ''}`}>
+                  {describe(d)}
                 </div>
-                <button
-                  className={`mini ${d.status === 'KILLED' ? 'revive' : 'kill'}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    run?.(d.status === 'KILLED' ? 'revive' : 'kill', { drone_id: d.id });
-                  }}
-                >
-                  {d.status === 'KILLED' ? 'Relaunch' : 'Take down'}
-                </button>
+                {(d.status === 'KILLED' || !ground.includes(d.status)) && (
+                  <button
+                    className={`mini ${d.status === 'KILLED' ? 'revive' : 'kill'}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      run?.(d.status === 'KILLED' ? 'revive' : 'kill', { drone_id: d.id });
+                    }}
+                  >
+                    {d.status === 'KILLED' ? 'Return to service' : 'Fail UAV'}
+                  </button>
+                )}
               </div>
               <div className="aircraft__right">
                 <div className="aircraft__alt">{fmt(d.agl, 0)} m AGL</div>
@@ -171,7 +198,7 @@ export function SwarmPanel({ telemetry, onSelect, run, selectedId }) {
 const COEFFICIENTS = [
   { key: 'β_T', symbol: 'T', label: 'Terrain', color: '#a45a06' },
   { key: 'β_D', symbol: 'D', label: 'Distance', color: '#1549c9' },
-  { key: 'β_J', symbol: 'J', label: 'Jamming', color: '#c1201b' },
+  { key: 'β_J', symbol: 'J', label: 'Interference', color: '#c1201b' },
   { key: 'β_W', symbol: 'W', label: 'Weather', color: '#0e7490' },
   { key: 'β_θ', symbol: 'θ', label: 'Antenna', color: '#6d28d9' },
 ];
@@ -222,7 +249,7 @@ export function CausalPanel({ telemetry }) {
       verdictClass = 'jam';
       verdictHead = 'Cause: NOT terrain';
       verdictBody = `${latest.id}: altitude produced no improvement, so terrain is `
-        + 'excluded. Consistent with jamming or range. Handover triggered.';
+        + 'excluded. Consistent with interference or range. Rerouting.';
     } else {
       verdictClass = 'unknown';
       verdictHead = 'Cause: partially terrain';
@@ -585,9 +612,9 @@ export function ClusterPanel({ telemetry }) {
 // ---------------------------------------------------------------------------
 
 const EVENT_TONE = (type = '') => {
-  if (/KILL|JAM|FAULT|DEGRADE|ALERT/i.test(type)) return 'alert';
-  if (/COMPLETE|RESTORE|ELECTION|SURVEY|LANDED/i.test(type)) return 'ok';
-  if (/INTERVENTION|RTH|REASSIGN/i.test(type)) return 'warn';
+  if (/KILL|JAM|FAULT|DEGRADE|ALERT|OUTAGE|PACKET_LOSS|LINK_FAILURE|NEW_TASK|DATA_LOST/i.test(type)) return 'alert';
+  if (/COMPLETE|RESTORE|ELECTION|SURVEY|LANDED|DELIVERED|READY|HANDOVER/i.test(type)) return 'ok';
+  if (/INTERVENTION|RTH|REASSIGN|PREEMPT|REALLOCATION|INTERFERENCE/i.test(type)) return 'warn';
   return 'info';
 };
 
@@ -680,33 +707,105 @@ export function SitrepPanel({ telemetry }) {
 // ---------------------------------------------------------------------------
 
 export function ControlsPanel({ run, onReset }) {
+  const inject = (kind, params = {}) => run('inject', { kind, ...params });
   return (
     <div className="panel">
       <div className="panel__head">
-        <span className="panel__title">Quick Faults</span>
+        <span className="panel__title">Disturbances</span>
       </div>
       <div className="panel__body">
         <div className="controls">
-          <button className="btn danger" onClick={() => run('inject', { fault_type: 'rf_degrade' })}>
-            Degrade RF (global)
+          <button className="btn danger" onClick={() => inject('uav_failure', { target: 'relay' })}>
+            Fail a relay
           </button>
-          <button className="btn danger" onClick={() => run('inject', { fault_type: 'jamming' })}>
-            Jam everywhere
+          <button className="btn danger" onClick={() => inject('comm_outage', { target: 'scout', duration: 40 })}>
+            Scout radio out
           </button>
-          <button className="btn" onClick={() => run('inject', { fault_type: 'restore' })}>
-            Restore RF
+          <button className="btn danger" onClick={() => inject('comm_outage', { gcs: true, duration: 20 })}>
+            GCS outage 20 s
+          </button>
+          <button className="btn danger" onClick={() => inject('packet_loss', { rate: 0.3, duration: 45 })}>
+            Packet loss 30%
+          </button>
+          <button className="btn danger" onClick={() => inject('comm_outage', { scope: 'global', noise_db: 14, duration: 30 })}>
+            Degrade RF (area)
+          </button>
+          <button className="btn danger" onClick={() => inject('battery_fault', { target: 'relay' })}>
+            Relay battery fault
           </button>
           <button className="btn" onClick={() => run('gust', { magnitude: 14 })}>
             Wind gust
           </button>
+          <button className="btn" onClick={() => run('inject', { kind: 'restore' })}>
+            Restore RF
+          </button>
           <button className="btn primary wide" onClick={onReset}>
-            Reset mission to start
+            Reset mission to planning
           </button>
         </div>
         <div style={{ fontSize: 10.5, color: 'var(--ink-3)', marginTop: 8, lineHeight: 1.5 }}>
-          For targeted actions use the Operator Control panel on the 3D view:
-          place a jammer where you want it, or select any aircraft and take it down.
+          These are the Stage 2 disturbance types. For placed ones use Operator Control on the
+          3D view: <b>+ Emergency</b> reports a new priority task, <b>+ Interference</b> opens a
+          communication-outage zone, and any aircraft can be failed from its card.
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Communication and roles
+// ---------------------------------------------------------------------------
+
+export function CommsPanel({ telemetry }) {
+  const comms = telemetry?.comms || {};
+  const mission = telemetry?.mission || telemetry?.demo?.mission || {};
+  const roles = mission.roles || {};
+  const drones = Object.values(telemetry?.drones || {});
+  const relays = drones.filter((d) => d.role === 'RELAY' && d.status === 'ACTIVE').length;
+  const pct = (v) => (v == null ? '—' : `${fmt(v * 100, 1)}%`);
+  const recent = [...(roles.recent || [])].reverse().slice(0, 4);
+
+  const rows = [
+    ['Relays flying / needed', `${relays} / ${roles.relays_needed ?? '—'}`, 'terrain-aware chain from the GCS'],
+    ['Packet delivery', pct(comms.pdr), `telemetry ${pct(comms.pdr_telemetry)} · survey ${pct(comms.pdr_survey)}`],
+    ['Latency', `${fmt(comms.latency_ms_mean, 1)} ms`, `p95 ${fmt(comms.latency_ms_p95, 1)} ms, end to end`],
+    ['Connectivity', pct(comms.connectivity_availability), 'airborne time with a path to the GCS'],
+    ['Downtime', `${fmt(comms.downtime_s_total, 1)} s`, `${comms.outage_count ?? 0} outages · longest ${fmt(comms.downtime_s_longest, 1)} s`],
+    ['Relay reallocations', String(comms.relay_reallocations ?? 0), `${roles.flaps ?? 0} undone within 30 s`],
+    ['Recovery time', comms.recovery_time_s_mean == null ? '—' : `${fmt(comms.recovery_time_s_mean, 1)} s`,
+      `mean over ${comms.disruptions ?? 0} disruptions`],
+    ['Data waiting in the air', String(comms.backlog_chunks ?? 0), 'survey chunks in store-and-forward'],
+  ];
+
+  return (
+    <div className="panel">
+      <div className="panel__head">
+        <span className="panel__title">Communication &amp; Roles</span>
+        <span className={`panel__badge ${(comms.connectivity_availability ?? 1) > 0.95 ? 'ok' : 'bad'}`}>
+          {pct(comms.connectivity_availability)} LINKED
+        </span>
+      </div>
+      <div className="panel__body">
+        {rows.map(([label, value, note]) => (
+          <div className="kv" key={label}>
+            <span className="kv__k">
+              {label}
+              <span style={{ display: 'block', fontSize: 9.5, color: 'var(--ink-3)', opacity: 0.8 }}>{note}</span>
+            </span>
+            <span className="kv__v" style={{ alignSelf: 'center' }}>{value}</span>
+          </div>
+        ))}
+        {recent.length > 0 && (
+          <div style={{ marginTop: 8, fontSize: 10.5, lineHeight: 1.5 }}>
+            <b>Recent role changes</b>
+            {recent.map((r) => (
+              <div key={`${r.time}-${r.uav}`} style={{ color: 'var(--ink-2)' }}>
+                T+{fmt(r.time, 0)} {r.uav}: {r.from.toLowerCase()} → {r.to.toLowerCase()} — {r.reason}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -718,65 +817,61 @@ export function ControlsPanel({ run, onReset }) {
 
 export function MetricsStrip({ telemetry }) {
   const metrics = telemetry?.metrics || {};
-  const election = telemetry?.election || {};
-  const gnn = telemetry?.gnn || {};
+  const comms = telemetry?.comms || {};
+  const mission = telemetry?.mission || telemetry?.demo?.mission || {};
+  const tasks = mission.tasks || {};
 
-  const backhaul = (metrics.backhaul_pdr ?? 0) * 100;
-  const battery = metrics.avg_battery ?? 0;
-  const electionMs = election.last_election_ms ?? 0;
-  const solveMs = gnn.convergence_time_ms ?? 0;
-  const surveyed = metrics.pois_surveyed ?? 0;
-  const totalPois = metrics.total_pois ?? 0;
-  // Closest approach over the whole mission, not the current spacing — the
-  // safety question is "did two aircraft ever get too close", which the
-  // instantaneous figure cannot answer.
-  const separation = metrics.min_separation_ever_m ?? metrics.min_separation_m ?? 0;
+  const pct = (v) => (v == null ? '—' : fmt(v * 100, 1));
+  const remaining = mission.remaining_s;
+  const clock = remaining == null ? '—'
+    : `${Math.max(0, Math.floor(remaining / 60))}:${String(Math.max(0, Math.floor(remaining % 60))).padStart(2, '0')}`;
+  const separation = metrics.min_separation_ever_m ?? 999;
   const collisions = metrics.collisions ?? 0;
+  const safetyIssues = collisions + (comms.geofence_violations ?? 0) + (comms.battery_depleted ?? 0);
 
   const items = [
     {
-      label: 'Backhaul PDR',
-      value: fmt(backhaul, 1), unit: '%',
-      tone: backhaul > 92 ? 'ok' : backhaul > 70 ? 'warn' : 'bad',
-      sub: 'target > 92%',
+      label: 'Mission clock',
+      value: clock, unit: '',
+      tone: mission.phase !== 'LIVE' ? 'neutral' : remaining > 120 ? 'ok' : 'warn',
+      sub: mission.phase === 'LIVE' ? 'remaining of allotted time' : (mission.phase || '').toLowerCase(),
     },
     {
-      label: 'Survey Progress',
-      value: `${surveyed}/${totalPois}`, unit: '',
-      tone: surveyed === totalPois && totalPois > 0 ? 'ok' : 'info',
-      sub: 'points of interest',
+      label: 'Tasks delivered',
+      value: `${tasks.delivered ?? 0}/${tasks.released ?? 0}`, unit: '',
+      tone: tasks.released && tasks.delivered === tasks.released ? 'ok' : 'info',
+      sub: `priority-weighted ${pct(mission.priority_score)}%`,
     },
     {
-      label: 'Mean Battery',
-      value: fmt(battery, 0), unit: '%',
-      tone: battery > 50 ? 'ok' : battery > 22 ? 'warn' : 'bad',
-      sub: 'RTH reserve 22%',
+      label: 'Packet delivery',
+      value: pct(comms.pdr), unit: '%',
+      tone: comms.pdr == null ? 'neutral' : comms.pdr > 0.95 ? 'ok' : comms.pdr > 0.85 ? 'warn' : 'bad',
+      sub: `latency ${fmt(comms.latency_ms_mean, 1)} ms`,
     },
     {
-      label: 'Self-Heal',
-      value: fmt(electionMs, 1), unit: 'ms',
-      tone: electionMs > 0 && electionMs < 300 ? 'ok' : electionMs === 0 ? 'neutral' : 'bad',
-      sub: 'target < 300 ms',
+      label: 'Connectivity',
+      value: pct(comms.connectivity_availability), unit: '%',
+      tone: comms.connectivity_availability == null ? 'neutral'
+        : comms.connectivity_availability > 0.95 ? 'ok' : comms.connectivity_availability > 0.85 ? 'warn' : 'bad',
+      sub: `downtime ${fmt(comms.downtime_s_total, 0)} s`,
     },
     {
-      label: 'Relay Solve',
-      value: fmt(solveMs, 1), unit: 'ms',
-      tone: 'info',
-      sub: 'GNN + refinement',
+      label: 'Recovery',
+      value: comms.recovery_time_s_mean == null ? '—' : fmt(comms.recovery_time_s_mean, 1), unit: 's',
+      tone: comms.recovery_time_s_mean == null ? 'neutral' : comms.recovery_time_s_mean < 10 ? 'ok' : 'warn',
+      sub: `${comms.relay_reallocations ?? 0} relay reallocations`,
     },
     {
-      label: 'Closest Approach',
+      label: 'Closest approach',
       value: separation > 900 ? '—' : fmt(separation, 0), unit: 'm',
-      // Proposal spec is > 5 m. Below 15 m is flagged as caution so an
-      // operator sees a close pass before it becomes a violation.
       tone: separation > 15 ? 'ok' : separation > 5 ? 'warn' : 'bad',
-      sub: 'mission minimum · spec > 5 m',
+      sub: `${collisions} collisions`,
     },
     {
-      label: 'Collisions',
-      value: String(collisions), unit: '',
-      tone: collisions === 0 ? 'ok' : 'bad',
-      sub: 'terrain + aircraft',
+      label: 'Safety',
+      value: safetyIssues === 0 ? 'OK' : String(safetyIssues), unit: '',
+      tone: safetyIssues === 0 ? 'ok' : 'bad',
+      sub: `geofence ${comms.geofence_violations ?? 0} · flat battery ${comms.battery_depleted ?? 0}`,
     },
   ];
 
@@ -810,12 +905,18 @@ export function MetricsStrip({ telemetry }) {
 export function EvidencePanel() {
   const [data, setData] = useState(null);
 
+  const [suite, setSuite] = useState(null);
+
   useEffect(() => {
     let cancelled = false;
     fetch('/api/benchmarks')
       .then((r) => r.json())
       .then((json) => { if (!cancelled) setData(json); })
       .catch(() => { if (!cancelled) setData({ available: false }); });
+    fetch('/api/uavx_benchmarks')
+      .then((r) => r.json())
+      .then((json) => { if (!cancelled) setSuite(json); })
+      .catch(() => { if (!cancelled) setSuite({ available: false }); });
     return () => { cancelled = true; };
   }, []);
 
@@ -844,16 +945,24 @@ export function EvidencePanel() {
   const ctrl = data.control || {};
   const heal = m.self_heal_latency_ms || m.election_time_ms;
 
+  const agg = suite?.available ? (suite.aggregate || {}) : null;
+  const pmS = (key, scale = 100, digits = 1, unit = '%') => {
+    const s0 = agg?.[key];
+    return s0 && s0.n ? `${fmt(s0.mean * scale, digits)} ± ${fmt(s0.std * scale, digits)}${unit}` : '—';
+  };
   const rows = [
-    ['Mission completion', pm(m.mission_completion_fraction, 100, 0, '%'),
-      `${m.mission_completion_fraction?.n ?? 0} valleys`],
-    ['Collisions', pm(m.collisions, 1, 1), 'per mission'],
-    ['Closest approach', pm(m.min_separation_m, 1, 0, ' m'), 'mission minimum · spec > 5 m'],
-    ['Backhaul PDR, jammed', pm(m.backhaul_pdr_under_jamming, 100, 1, '%'), 'target > 92%'],
-    ['Self-heal, end-to-end', pm(heal, 1, 0, ' ms'), 'target < 300 ms'],
+    ...(agg ? [
+      ['Mission completion', pmS('completion_rate'), `${suite.runs ?? 0} scenario runs`],
+      ['Priority-weighted score', pmS('priority_weighted_score'), 'P1 = 3, P2 = 2, P3 = 1'],
+      ['Packet delivery ratio', pmS('packet_delivery_ratio'), 'all traffic, end to end'],
+      ['Connectivity availability', pmS('connectivity_availability'), 'airborne time linked to GCS'],
+      ['Recovery time', pmS('recovery_time_s_mean', 1, 1, ' s'), 'per disruption'],
+      ['Collisions', pmS('collisions', 1, 1, ''), 'per mission'],
+    ] : []),
+    ['Self-heal, end-to-end', pm(heal, 1, 0, ' ms'), 'relay failover · target < 300 ms'],
     ['Relay gain over naive', pm(t.improvement_over_naive, 100, 1, ' pts'),
-      'held-out terrain'],
-    ['Causal: jamming ruled out', c.jamming_recall != null ? `${fmt(c.jamming_recall * 100, 0)}%` : '—',
+      'GNN placement, held-out terrain'],
+    ['Causal: interference ruled out', c.jamming_recall != null ? `${fmt(c.jamming_recall * 100, 0)}%` : '—',
       'no false "terrain"'],
     ['Causal: terrain confirmed', c.terrain_recall != null ? `${fmt(c.terrain_recall * 100, 0)}%` : '—',
       'single-node probe'],
@@ -893,9 +1002,9 @@ export function EvidencePanel() {
         )}
 
         <div style={{ fontSize: 10, color: 'var(--ink-3)', marginTop: 8, lineHeight: 1.5 }}>
-          Mean ± standard deviation over repeated randomised runs, generated{' '}
-          {data.generated_at || '—'}. Full protocols and per-trial values in{' '}
-          <code>models/benchmarks.json</code>.
+          Mean ± standard deviation over repeated randomised runs. Mission figures:{' '}
+          <code>python -m bench.uavx_suite</code> ({suite?.generated_at || 'not run'}); component
+          figures: <code>models/benchmarks.json</code>.
         </div>
       </div>
     </div>

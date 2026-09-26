@@ -1,5 +1,5 @@
 """
-Online relay topology optimiser for C-DAWN.
+Online relay topology optimiser for the UAV-X swarm.
 
 Architecture: **propose, then refine.**
 
@@ -92,6 +92,9 @@ class RelayOptimizer:
         self.last_connectivity_after = 0.0
         self.last_stations: Dict[str, list] = {}
         self.convergence_history = deque(maxlen=120)
+        # Terrain-aware hop points from the role manager's link-budget chain.
+        # When there is one per relay they replace the evenly spaced anchors.
+        self.chain_hint: list = []
 
     @staticmethod
     def _load_model(path: str):
@@ -132,13 +135,19 @@ class RelayOptimizer:
 
         from sim.drone import DroneRole
 
-        gcs_index = next(
-            (i for i, d in enumerate(ids)
-             if drones[d].role == DroneRole.GCS_RELAY), 0
-        )
+        # The fixed ground station is the anchor when the world has one;
+        # otherwise (older callers) an aircraft flagged GCS_RELAY.
+        gcs = getattr(self.world, "gcs", None)
+        if gcs is not None and gcs.id in ids:
+            gcs_index = ids.index(gcs.id)
+        else:
+            gcs_index = next(
+                (i for i, d in enumerate(ids)
+                 if d in drones and drones[d].role == DroneRole.GCS_RELAY), 0
+            )
         scout_indices = [
             i for i, d in enumerate(ids)
-            if drones[d].role == DroneRole.SCOUT
+            if d in drones and drones[d].role == DroneRole.SCOUT
         ]
         if not scout_indices:
             return {"status": "no_scouts"}
@@ -325,6 +334,13 @@ class RelayOptimizer:
 
         relay_idx.sort(key=lambda i: float(torch.norm(positions[i] - positions[gcs_index])))
         count = len(relay_idx)
+
+        hint = [np.asarray(p, dtype=float) for p in (self.chain_hint or [])]
+        if hint and len(hint) == count:
+            hint.sort(key=lambda p: float(np.linalg.norm(p - gcs)))
+            for i, point in zip(relay_idx, hint):
+                anchors[i] = torch.tensor(point, dtype=positions.dtype)
+            return anchors
 
         for slot, i in enumerate(relay_idx):
             frac = (slot + 1) / (count + 1)

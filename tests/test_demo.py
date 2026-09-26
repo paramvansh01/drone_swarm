@@ -113,13 +113,14 @@ def test_telemetry_survives_missing_subsystems():
 def test_demo_controller_assembles_and_ticks():
     from gcs.backend.demo_controller import DemoController
 
-    demo = DemoController(phase_duration=10.0)
+    demo = DemoController(phase_duration=10.0, autostart=True)
     try:
         assert len(demo.sim.drones) == 5
         assert demo.active_controller
         assert demo.shadow_kind in ("PID", "LTC")
+        assert demo.mission_phase == "LIVE"
 
-        for _ in range(200):
+        for _ in range(500):
             demo.sim.tick()
             demo._post_tick()
 
@@ -150,17 +151,18 @@ def test_fault_injection_changes_rf_state():
 def test_kill_node_removes_it_from_the_mesh():
     from gcs.backend.demo_controller import DemoController
 
-    demo = DemoController(phase_duration=10.0)
+    demo = DemoController(phase_duration=10.0, autostart=True, shadow=False)
     try:
-        for _ in range(60):
-            demo.sim.tick()
+        for _ in range(600):
+            demo.step()
 
-        demo.inject_fault("kill_node", {"drone_id": "RELAY-1"})
+        victim = next(d.id for d in demo.sim.drones.values() if d.is_alive)
+        demo.inject_fault("kill_node", {"drone_id": victim})
         demo.sim.tick()
 
-        assert demo.sim.drones["RELAY-1"].is_alive is False
+        assert demo.sim.drones[victim].is_alive is False
         for drone in demo.sim.drones.values():
-            assert "RELAY-1" not in drone.neighbors
+            assert victim not in drone.neighbors
     finally:
         demo.stop()
 
@@ -168,18 +170,18 @@ def test_kill_node_removes_it_from_the_mesh():
 def test_reset_restores_initial_state():
     from gcs.backend.demo_controller import DemoController
 
-    demo = DemoController(phase_duration=10.0)
+    demo = DemoController(phase_duration=10.0, autostart=True, shadow=False)
     try:
-        for _ in range(300):
-            demo.sim.tick()
-            demo._post_tick()
+        for _ in range(600):
+            demo.step()
 
-        demo.inject_fault("kill_node", {"drone_id": "RELAY-1"})
+        demo.inject_fault("kill_node", {"drone_id": "UAV-1"})
         demo.reset()
 
         assert demo.sim.sim_time == 0.0
         assert demo.sim.tick_count == 0
-        assert all(d.is_alive for d in demo.sim.drones.values())
+        assert demo.mission_phase == "PLANNING"
+        assert all(d.on_pad for d in demo.sim.drones.values())
         assert all(not p.surveyed for p in demo.world.pois)
         assert demo.sim.metrics["collisions"] == 0
     finally:

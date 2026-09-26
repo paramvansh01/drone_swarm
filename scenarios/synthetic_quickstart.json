@@ -1,0 +1,111 @@
+{
+  "name": "Quickstart \u2014 earthquake response in the training valley",
+  "description": "A 4 km mountain valley after an earthquake. Five UAVs from a GCS at the valley mouth survey eight damage sites up the valley. Hidden disturbances: a relay fails, an interference zone opens mid-valley, links lose packets, and a priority-1 report of trapped survivors comes in near the far end.",
+  "theatre": "synthetic",
+  "seed": 7,
+  "time_limit_s": 720,
+  "fleet": {
+    "size": 5,
+    "recharge_s": 90
+  },
+  "geofence": {
+    "half_width_m": 700,
+    "max_agl_m": 400
+  },
+  "tasks": {
+    "list": [
+      {
+        "id": "POI-001",
+        "along": 0.08,
+        "offset_m": 60,
+        "priority": 2,
+        "category": "collapsed_building"
+      },
+      {
+        "id": "POI-002",
+        "along": 0.22,
+        "offset_m": -80,
+        "priority": 3,
+        "category": "blocked_road"
+      },
+      {
+        "id": "POI-003",
+        "along": 0.35,
+        "offset_m": 40,
+        "priority": 1,
+        "category": "collapsed_building"
+      },
+      {
+        "id": "POI-004",
+        "along": 0.48,
+        "offset_m": -40,
+        "priority": 2,
+        "category": "landslide_debris"
+      },
+      {
+        "id": "POI-005",
+        "along": 0.6,
+        "offset_m": 90,
+        "priority": 3,
+        "category": "damaged_bridge"
+      },
+      {
+        "id": "POI-006",
+        "along": 0.72,
+        "offset_m": -60,
+        "priority": 1,
+        "category": "trapped_survivors"
+      },
+      {
+        "id": "POI-007",
+        "along": 0.8,
+        "offset_m": 30,
+        "priority": 2,
+        "category": "flooded_area"
+      },
+      {
+        "id": "POI-008",
+        "along": 0.88,
+        "offset_m": -30,
+        "priority": 3,
+        "category": "landslide_debris"
+      }
+    ]
+  },
+  "environment": {
+    "wind_mps": 4.0,
+    "wind_heading_deg": 15,
+    "turbulence": 1.4
+  },
+  "disturbances": [
+    {
+      "t": 120,
+      "type": "uav_failure",
+      "target": "relay"
+    },
+    {
+      "t": 200,
+      "type": "comm_outage",
+      "along": 0.5,
+      "offset_m": 250,
+      "radius_m": 900,
+      "duration": 40
+    },
+    {
+      "t": 260,
+      "type": "packet_loss",
+      "rate": 0.25,
+      "duration": 45
+    },
+    {
+      "t": 300,
+      "type": "new_task",
+      "task": {
+        "along": 0.7,
+        "offset_m": 80,
+        "priority": 1,
+        "category": "trapped_survivors"
+      }
+    }
+  ]
+}

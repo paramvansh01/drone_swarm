@@ -241,6 +241,9 @@ def build_node_features(
     Only live aircraft are included — a killed node is not part of the mesh,
     and including it would let the optimiser plan routes through a drone that
     has fallen out of the sky.
+
+    When `world` carries a ground station, it is appended as a fixed node with
+    the ground-station flag set: the anchor every relay chain must reach.
     """
     from sim.drone import DroneRole
 
@@ -268,9 +271,25 @@ def build_node_features(
             0.0,      # jamming flag, set by the caller when known
         ])
 
-        # Only relays are repositionable; scouts are flying the survey and the
-        # GCS relay holds the link home.
-        movable.append(drone.role == DroneRole.RELAY)
+        # Only relays are repositionable; scouts are flying the survey and
+        # aircraft on their way home are not part of the plan. A relay being
+        # relieved holds its station while the plan moves on without it.
+        movable.append(drone.role == DroneRole.RELAY
+                       and not getattr(drone, "handover_to", None))
+
+    gcs = getattr(world, "gcs", None) if world is not None else None
+    if gcs is not None:
+        links = [float(getattr(d, "gcs_link", 0.0)) for d in drones.values() if d.is_alive] or [0.0]
+        ids.append(gcs.id)
+        positions.append(np.asarray(gcs.position, dtype=float).tolist())
+        features.append([
+            1.0, 0.0, 0.0, 1.0,
+            float(np.mean(links)), float(np.min(links)),
+            sum(1 for q in links if q > 0.0) / 8.0,
+            float(gcs.mast_m) / 300.0,
+            0.0,
+        ])
+        movable.append(False)
 
     return (
         torch.tensor(positions, dtype=torch.float32),

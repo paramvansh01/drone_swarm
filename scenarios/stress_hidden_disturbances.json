@@ -1,0 +1,24 @@
+{
+  "name": "Stress — Stage 2 style hidden disturbances",
+  "description": "The training valley with everything the Stage 2 brief lists, and more of it: two UAV failures, a radio failure, a GCS receiver outage, a severed relay link, an area-wide RF degradation, 40% packet loss, a battery fault, and three new emergency tasks including a region. Five UAVs, fifteen minutes.",
+  "theatre": "synthetic",
+  "seed": 99,
+  "time_limit_s": 900,
+  "fleet": {"size": 5, "recharge_s": 120},
+  "geofence": {"half_width_m": 700, "max_agl_m": 400},
+  "tasks": {"auto": {"count": 8, "seed": 99}},
+  "environment": {"wind_mps": 4.0, "wind_heading_deg": 15, "turbulence": 1.6},
+  "disturbances": [
+    {"t": 60,  "type": "new_task", "task": {"along": 0.55, "offset_m": 90, "priority": 1, "category": "trapped_survivors"}},
+    {"t": 110, "type": "uav_failure", "target": "relay"},
+    {"t": 160, "type": "comm_outage", "target": "scout", "duration": 45},
+    {"t": 220, "type": "comm_outage", "scope": "global", "noise_db": 16, "duration": 30},
+    {"t": 280, "type": "packet_loss", "rate": 0.4, "duration": 60},
+    {"t": 330, "type": "comm_outage", "gcs": true, "duration": 25},
+    {"t": 380, "type": "new_task", "region": {"along": 0.4, "offset_m": -60, "radius_m": 130, "priority": 1, "category": "collapsed_building"}},
+    {"t": 430, "type": "link_failure", "a": "UAV-1", "b": "GCS", "duration": 60},
+    {"t": 480, "type": "battery_fault", "target": "relay", "severity": 0.4},
+    {"t": 540, "type": "uav_failure", "target": "scout"},
+    {"t": 600, "type": "new_task", "task": {"along": 0.25, "offset_m": 50, "priority": 1, "category": "trapped_survivors"}}
+  ]
+}

@@ -745,8 +745,8 @@ button { font-family: inherit; }
 .tool--select.on { background: var(--info); }
 .tool--add_scout.on { background: var(--role-scout); }
 .tool--add_relay.on { background: var(--role-relay); }
-.tool--add_poi.on { background: #b45309; }
-.tool--add_jammer.on { background: var(--alert); }
+.tool--add_poi.on { background: var(--alert); }
+.tool--add_jammer.on, .tool--add_interference.on { background: #9333ea; }
 
 .operator__hint {
   margin: 7px 0 4px;
@@ -952,7 +952,7 @@ body { letter-spacing: 0.1px; }
 .tool { border-radius: 2px; font-weight: 600; }
 .tool.on, .tool--select.on, .tool--add_scout.on, .tool--add_relay.on,
 .tool--add_poi.on { background: var(--ink); color: #fff; }
-.tool--add_jammer.on { background: var(--alert); }
+.tool--add_jammer.on, .tool--add_interference.on { background: #9333ea; }
 .camstrip__btn { border-radius: 2px; font-weight: 500; }
 .camstrip__btn.on { background: var(--ink); color: #fff; border-color: var(--ink); }
 
@@ -1200,3 +1200,38 @@ body { letter-spacing: 0.1px; }
   margin-right: 12px; font-family: var(--mono); letter-spacing: 0.04em;
 }
 .view-switch:hover { background: #1b2430; }
+
+/* ==========================================================================
+   Fit laptop screens (≈1280–1600 px wide): the header can never widen the
+   page, and it sheds detail before anything is pushed off screen.
+   ========================================================================== */
+.app { grid-template-columns: minmax(0, 1fr); width: 100vw; overflow: hidden; }
+.cmdbar { min-width: 0; overflow: hidden; gap: 16px; }
+.brand { flex-shrink: 0; white-space: nowrap; }
+.phases { flex: 1 1 auto; min-width: 0; overflow: hidden; }
+.theatre-btn, .cmdbar__right { flex-shrink: 0; }
+.cmdbar__right { gap: 12px; }
+.workspace, .metrics { min-width: 0; }
+
+@media (max-width: 1700px) {
+  .cmdbar__viewing { display: none; }
+  .phase { padding: 5px 7px; }
+  .phase__sep { width: 8px; }
+}
+@media (max-width: 1500px) {
+  /* Only the current phase keeps its label; the rest are dots */
+  .phase:not(.active) .phase__label { display: none; }
+  .theatre-btn__coords { display: none; }
+  .brand__sub { display: none; }
+}
+@media (max-width: 1200px) {
+  .phases { display: none; }
+}
+
+/* Legend: collapsible, so it never sits under the operator panel */
+.legend__toggle {
+  border: none; background: transparent; cursor: pointer; padding: 0;
+  font: inherit; font-size: 10px; font-weight: 700; letter-spacing: 1px;
+  text-transform: uppercase; color: var(--ink-3);
+}
+.legend__toggle:hover { color: var(--ink); }

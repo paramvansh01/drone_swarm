@@ -13,7 +13,7 @@ import * as THREE from 'three';
  *      target. A camera that snaps to its ideal position every frame looks
  *      like a video game; a real one has mass and lags its operator.
  *
- *   2. Event-driven cutting. When a node is killed or a jammer lights up, the
+ *   2. Event-driven cutting. When a node fails or interference lights up, the
  *      director cuts to a shot framing that subject, the way a director
  *      covering a live event would.
  *
@@ -108,11 +108,10 @@ export default class CameraDirector {
       this.cutTo('establishing', null, 8);
     } else if (type.includes('INTERVENTION_EXECUTED')) {
       this.cutTo('chase', event.drone_id ?? null, 8);
-    } else if (type === 'INTERCEPTOR' && (event.message || '').includes('launched')) {
-      // Ride along with the munition for the whole engagement
-      this.cutTo('chase', event.params?.interceptor_id ?? null, 60);
-    } else if (type === 'JAMMER_DESTROYED') {
-      this.cutTo('strike', 'STRIKE', 7);
+    } else if (type === 'HANDOVER' || type === 'LAUNCH') {
+      this.cutTo('chase', event.params?.drone ?? event.params?.uav ?? null, 8);
+    } else if (type === 'NEW_TASK') {
+      this.cutTo('establishing', null, 8);
     } else if (type === 'SURVEY_COMPLETE') {
       this.cutTo('top_down', event.drone ?? null, 7);
     }
@@ -201,19 +200,6 @@ export default class CameraDirector {
         desiredPos.copy(subject).add(back).add(new THREE.Vector3(0, 17, 0));
         desiredLook = subject.clone().add(vel.clone().multiplyScalar(1.6));
         desiredFov = 58;
-        break;
-      }
-
-      case 'strike': {
-        // Wide slow orbit on the impact point: the fireball is ~70 m across
-        const angle = this.orbitAngle + t * 0.18;
-        desiredPos.set(
-          subject.x + Math.cos(angle) * 280,
-          subject.y + 110,
-          subject.z + Math.sin(angle) * 280,
-        );
-        desiredLook = subject.clone();
-        desiredFov = 50;
         break;
       }
 
@@ -402,7 +388,7 @@ export default class CameraDirector {
   }
 
   _swarmCentroid(drones) {
-    const live = Object.values(drones || {}).filter((d) => d.status !== 'KILLED' && d.role !== 'INTERCEPTOR');
+    const live = Object.values(drones || {}).filter((d) => d.status !== 'KILLED');
     if (!live.length) return this._lastSubject.clone();
 
     const sum = live.reduce(

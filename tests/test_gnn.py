@@ -246,10 +246,12 @@ def test_build_node_features_excludes_dead_nodes():
 
     positions, features, movable, ids = build_node_features(drones, world)
 
+    # Two live aircraft plus the fixed ground station
     assert "RELAY-1" not in ids
-    assert positions.shape[0] == 2
-    assert features.shape == (2, NODE_FEAT_DIM)
-    assert movable.shape[0] == 2
+    assert world.gcs.id in ids
+    assert positions.shape[0] == 3
+    assert features.shape == (3, NODE_FEAT_DIM)
+    assert movable.shape[0] == 3
 
 
 def test_build_node_features_marks_only_relays_movable():
@@ -268,3 +270,5 @@ def test_build_node_features_marks_only_relays_movable():
     assert mapping["RELAY-1"] is True
     assert mapping["SCOUT-1"] is False
     assert mapping["GCS-RELAY"] is False
+    # The ground station is an immovable anchor carrying the GCS flag
+    assert mapping[world.gcs.id] is False

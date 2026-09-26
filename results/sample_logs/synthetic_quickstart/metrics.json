@@ -1,0 +1,191 @@
+{
+  "summary": {
+    "mission": {
+      "mission_time_s": 658.0,
+      "time_limit_s": 720.0,
+      "tasks_total": 9,
+      "tasks_released": 9,
+      "tasks_surveyed": 9,
+      "tasks_delivered": 9,
+      "completion_rate": 1.0,
+      "completion_time_s": 332.3,
+      "priority_weighted_score": 1.0,
+      "within_time_limit": true,
+      "emergent_tasks": [
+        {
+          "id": "POI-009",
+          "priority": 1,
+          "released_s": 300.0000000000171,
+          "surveyed_after_s": 31.739999999971133,
+          "delivered_after_s": 32.3111999999706
+        }
+      ],
+      "emergent_response_s_mean": 32.3111999999706,
+      "uavs_on_pads": [
+        "UAV-2",
+        "UAV-3",
+        "UAV-4",
+        "UAV-5"
+      ],
+      "uavs_lost": [
+        "UAV-1"
+      ]
+    },
+    "communication": {
+      "packet_delivery_ratio": 0.954875283446712,
+      "pdr_telemetry": 0.9537424453742446,
+      "pdr_survey_data": 1.0,
+      "latency_ms_mean": 7.704265171823802,
+      "latency_ms_p95": 11.699999999990496,
+      "survey_data_latency_s_mean": 0.2593333333333515,
+      "connectivity_availability": 0.9404656783008699,
+      "all_uavs_connected_fraction": 0.9512083903328723,
+      "downtime_s_total": 128.1,
+      "downtime_s_longest": 27.5,
+      "outage_count": 9,
+      "packets": {
+        "generated": {
+          "telemetry": 4302,
+          "survey": 108
+        },
+        "delivered": {
+          "telemetry": 4103,
+          "survey": 108
+        },
+        "dropped": {
+          "telemetry": 199,
+          "survey": 0
+        }
+      },
+      "survey_data_reopened": 0
+    },
+    "autonomy": {
+      "relay_reallocations": 9,
+      "handovers": 0,
+      "role_flaps": 0,
+      "reconfiguration_efficiency": 1.0,
+      "recovery_time_s_mean": 5.350000000002832,
+      "recovery_time_s_max": 32.10000000001699,
+      "disruptions": 6,
+      "disruptions_hitless": 5,
+      "disruptions_unrecovered": 0,
+      "failover_ms_last": 0.17787504475563765,
+      "relay_solves": 671
+    },
+    "robustness": {
+      "after_first_disruption": {
+        "availability": 0.9196232339089482,
+        "pdr": 0.9386748844375963
+      },
+      "per_disruption": [
+        {
+          "kind": "uav_failure",
+          "t": 120.0,
+          "detail": {
+            "drone_id": "UAV-1"
+          },
+          "hitless": true,
+          "recovery_s": 0.0,
+          "availability_before": 1.0,
+          "availability_after": 1.0,
+          "pdr_before": 1.0,
+          "pdr_after": 1.0
+        },
+        {
+          "kind": "uav_failure",
+          "t": 120.0,
+          "detail": {
+            "uav": "UAV-1",
+            "role": "RELAY"
+          },
+          "hitless": true,
+          "recovery_s": 0.0,
+          "availability_before": 1.0,
+          "availability_after": 1.0,
+          "pdr_before": 1.0,
+          "pdr_after": 1.0
+        },
+        {
+          "kind": "comm_outage",
+          "t": 200.0,
+          "detail": {
+            "source": "RFI-1",
+            "x": 1935.36,
+            "y": 1957.9224370829102,
+            "power_dbm": 5.614850188786498,
+            "until": 240.0000000000285
+          },
+          "hitless": false,
+          "recovery_s": 32.1,
+          "availability_before": 1.0,
+          "availability_after": 0.4666666666666667,
+          "pdr_before": 1.0,
+          "pdr_after": 0.5916666666666667
+        },
+        {
+          "kind": "packet_loss",
+          "t": 260.0,
+          "detail": {
+            "node": "*",
+            "rate": 0.25,
+            "until": 305.0000000000535
+          },
+          "hitless": true,
+          "recovery_s": 0.0,
+          "availability_before": 0.4657762938230384,
+          "availability_after": 1.0,
+          "pdr_before": 0.5908141962421712,
+          "pdr_after": 0.9937629937629938
+        },
+        {
+          "kind": "relay_rth",
+          "t": 266.0,
+          "detail": {
+            "uav": "UAV-4"
+          },
+          "hitless": true,
+          "recovery_s": 0.0,
+          "availability_before": 0.565,
+          "availability_after": 1.0,
+          "pdr_before": 0.6145833333333334,
+          "pdr_after": 0.99375
+        },
+        {
+          "kind": "relay_rth",
+          "t": 472.1,
+          "detail": {
+            "uav": "UAV-5"
+          },
+          "hitless": true,
+          "recovery_s": 0.0,
+          "availability_before": 1.0,
+          "availability_after": 1.0,
+          "pdr_before": 1.0,
+          "pdr_after": 1.0
+        }
+      ]
+    },
+    "safety": {
+      "collisions": 0,
+      "near_misses": 0,
+      "min_separation_m": 19.02,
+      "terrain_contacts": 0,
+      "conflicts_resolved": 2,
+      "geofence_violations": 0,
+      "geofence_violation_s": 0.0,
+      "altitude_violations": 0,
+      "battery_depleted": 0,
+      "min_battery_pct": 25.0,
+      "min_landing_battery_pct": 25.0,
+      "landings": 4
+    }
+  },
+  "indicative_scores": {
+    "mission_completion": 100.0,
+    "communication_resilience": 94.8,
+    "relay_role_management": 100.0,
+    "fault_recovery": 83.3,
+    "safety": 100.0,
+    "weighted_95pct_of_rubric": 96.0
+  }
+}

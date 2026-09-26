@@ -7,6 +7,7 @@ import BaseConsole from './components/BaseConsole';
 import {
   CausalPanel,
   ClusterPanel,
+  CommsPanel,
   ControlPanel,
   ControlsPanel,
   EventLog,
@@ -21,13 +22,15 @@ import {
 
 const PHASES = [
   { id: 1, label: 'Launch & Survey' },
-  { id: 2, label: 'Contested RF' },
-  { id: 3, label: 'Node Loss' },
-  { id: 4, label: 'SITREP' },
+  { id: 2, label: 'Comms Degraded' },
+  { id: 3, label: 'UAV Failure' },
+  { id: 4, label: 'Emergency Task' },
+  { id: 5, label: 'Recharge & Handover' },
 ];
 
 function CommandBar({ connected, telemetry, onTheatre, onSwitch }) {
-  const simTime = telemetry?.sim_time ?? 0;
+  const simTime = telemetry?.mission?.phase === 'LIVE'
+    ? (telemetry?.mission?.elapsed ?? 0) : (telemetry?.sim_time ?? 0);
   const phase = telemetry?.metrics?.current_phase ?? 0;
   const cluster = telemetry?.cluster;
   // The node this browser tab is actually connected to. On BRAVO/CHARLIE the
@@ -42,7 +45,7 @@ function CommandBar({ connected, telemetry, onTheatre, onSwitch }) {
       <div className="brand">
         <div>
           <div className="brand__name">C-DAWN</div>
-          <div className="brand__sub">Swarm Command · Simulation</div>
+          <div className="brand__sub">UAV-X · Simulation</div>
         </div>
       </div>
 
@@ -53,15 +56,15 @@ function CommandBar({ connected, telemetry, onTheatre, onSwitch }) {
               className={`phase ${phase > p.id ? 'done' : phase === p.id ? 'active' : ''}`}
             >
               <span className="phase__dot" />
-              {p.label}
+              <span className="phase__label">{p.label}</span>
             </div>
             {i < PHASES.length - 1 && <span className="phase__sep" />}
           </div>
         ))}
       </div>
 
-      <button className="theatre-btn" onClick={onTheatre} title="Change theatre of operations">
-        <span className="theatre-btn__label">Theatre</span>
+      <button className="theatre-btn" onClick={onTheatre} title="Change the disaster site">
+        <span className="theatre-btn__label">Disaster site</span>
         <span className="theatre-btn__name">{telemetry?.demo?.theatre?.name || '—'}</span>
         {telemetry?.demo?.theatre?.lat != null && (
           <span className="theatre-btn__coords">
@@ -77,7 +80,7 @@ function CommandBar({ connected, telemetry, onTheatre, onSwitch }) {
           Ground base ▸
         </button>
         {here && (
-          <div style={{ textAlign: 'right' }}>
+          <div className="cmdbar__viewing" style={{ textAlign: 'right' }}>
             <div className="clock__label">
               Viewing from{here.upstream ? ` · sim on ${here.upstream}` : ''}
             </div>
@@ -94,7 +97,9 @@ function CommandBar({ connected, telemetry, onTheatre, onSwitch }) {
         )}
 
         <div style={{ textAlign: 'right' }}>
-          <div className="clock__label">Mission time</div>
+          <div className="clock__label">
+            {telemetry?.mission?.phase === 'LIVE' ? 'Mission time' : (telemetry?.mission?.phase || 'Sim time')}
+          </div>
           <div className="clock">T+{minutes}:{seconds}</div>
         </div>
 
@@ -118,7 +123,10 @@ export default function App() {
   const [wind, setWind] = useState({ speed: 7, heading: 15 });
   const [toast, setToast] = useState(null);
   // Open the globe on launch: the operator starts by choosing where to fly
-  const [theatreOpen, setTheatreOpen] = useState(true);
+  // (?globe=0 skips it, e.g. when recording a demo of a scenario already loaded)
+  const [theatreOpen, setTheatreOpen] = useState(
+    () => new URLSearchParams(window.location.search).get('globe') !== '0',
+  );
 
   // Two screens, two jobs: the base laptop runs mission control and reads the
   // field's reports; the forward node shows the operation itself. Chosen by
@@ -154,8 +162,9 @@ export default function App() {
     const r = lastResult.result || {};
     if (!r.ok) setToast({ bad: true, text: r.error || 'Command failed' });
     else if (r.drone_id && lastResult.name === 'add_drone') setToast({ text: `${r.drone_id} deployed` });
-    else if (r.jammer_id && lastResult.name === 'add_jammer') setToast({ text: `${r.jammer_id} emplaced` });
-    else if (r.poi_id && lastResult.name === 'add_poi') setToast({ text: `${r.poi_id} marked for survey` });
+    else if (r.jammer_id && lastResult.name === 'add_interference') setToast({ text: `Interference ${r.jammer_id} switched on` });
+    else if (r.poi_id && lastResult.name === 'add_poi') setToast({ text: `${r.poi_id} reported — priority 1` });
+    else if (lastResult.name === 'launch_mission') setToast({ text: 'Mission launched' });
     else return undefined;
     const timer = setTimeout(() => setToast(null), 2600);
     return () => clearTimeout(timer);
@@ -165,9 +174,8 @@ export default function App() {
     const { x, y } = point;
     switch (activeTool) {
       case 'add_scout': runCommand('add_drone', { role: 'SCOUT', x, y }); break;
-      case 'add_relay': runCommand('add_drone', { role: 'RELAY', x, y }); break;
-      case 'add_poi': runCommand('add_poi', { x, y, category: 'survivor' }); break;
-      case 'add_jammer': runCommand('add_jammer', { x, y, power_dbm: jammerPower }); break;
+      case 'add_poi': runCommand('add_poi', { x, y, category: 'trapped_survivors', priority: 1 }); break;
+      case 'add_interference': runCommand('add_interference', { x, y, power_dbm: jammerPower }); break;
       case 'goto':
         if (selected?.kind === 'drone') runCommand('goto', { drone_id: selected.id, x, y });
         setTool('select');
@@ -246,6 +254,7 @@ export default function App() {
             onSelect={(id) => { setSelected({ kind: 'drone', id }); frame(id); }}
             run={runCommand}
           />
+          <CommsPanel telemetry={data} />
           <CausalPanel telemetry={data} />
           <LinkHealthPanel telemetry={data} />
           <TopologyPanel telemetry={data} />

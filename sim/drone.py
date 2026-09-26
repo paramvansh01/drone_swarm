@@ -1,5 +1,5 @@
 """
-Drone agent model for C-DAWN simulation.
+Drone agent model for the UAV-X simulation.
 
 Each drone maintains its full state (position, velocity, orientation, battery,
 sensors, role) and provides interfaces for controllers and the mesh network.
@@ -13,11 +13,11 @@ import time
 
 
 class DroneRole(Enum):
-    """Operational role in the swarm."""
+    """Operational role in the swarm. Roles are dynamic: any UAV can fly any role."""
     SCOUT = auto()       # Surveys PoIs, collects imagery
-    RELAY = auto()       # Maintains mesh connectivity
-    GCS_RELAY = auto()   # Primary relay back to Ground Control Station
-    STANDBY = auto()     # Idle / reserve
+    RELAY = auto()       # Holds a station in the multi-hop chain to the GCS
+    GCS_RELAY = auto()   # Legacy: the fixed ground station is now `World.gcs`
+    STANDBY = auto()     # No mission role: returning, on the pad, or in reserve
 
 
 class DroneStatus(Enum):
@@ -26,7 +26,14 @@ class DroneStatus(Enum):
     LOW_BATTERY = auto()
     RETURNING = auto()   # RTH (Return to Home)
     KILLED = auto()      # Simulated failure / "KILL NODE"
-    LANDED = auto()
+    LANDED = auto()      # Down away from a pad (battery exhausted / forced landing)
+    CHARGING = auto()    # On a GCS pad, battery being swapped / recharged
+    READY = auto()       # On a GCS pad, charged, available for launch
+
+
+# Statuses in which the aircraft is on the ground and out of the mesh
+GROUND_STATUSES = (DroneStatus.KILLED, DroneStatus.LANDED,
+                   DroneStatus.CHARGING, DroneStatus.READY)
 
 
 @dataclass
@@ -55,9 +62,13 @@ class DroneConfig:
     max_yaw_rate: float = 2.0     # rad/s
 
     battery_capacity: float = 100.0    # state of charge (%)
-    battery_drain_rate: float = 0.115  # %/s at hover  (~14.5 min hover)
-    battery_drain_rate_max: float = 0.30  # %/s at full thrust
-    rth_reserve_pct: float = 22.0      # SoC below which RTH is mandatory
+    # Drain = base + (max - base) * thrust fraction. Hover is ~44 % thrust, so
+    # ~0.094 %/s (about 18 min); cruise ~0.11 %/s (about 15 min) — a typical
+    # 2 kg survey quadrotor, and short enough that a 15-minute mission needs
+    # battery swaps.
+    battery_drain_rate: float = 0.05   # %/s at zero thrust (avionics, radio, payload)
+    battery_drain_rate_max: float = 0.15   # %/s at full thrust
+    rth_reserve_pct: float = 12.0      # absolute floor; the RTH trigger is energy-based
 
     gps_noise_std: float = 0.6    # m (GNSS in terrain-shadowed valley)
     baro_noise_std: float = 0.35  # m
@@ -142,14 +153,37 @@ class Drone:
 
         # Mesh network state
         self.neighbors: Dict[str, float] = {}  # drone_id -> link quality [0,1]
+        self.gcs_link: float = 0.0             # direct link quality to the GCS
+        # False while the aircraft's radio is out (a communication-outage
+        # disturbance): it keeps flying but can neither send nor relay.
+        self.radio_ok: bool = True
         self.killed_at: Optional[float] = None
         self.packets_sent = 0
         self.packets_received = 0
         self.packets_dropped = 0
 
+        # Energy / recharge bookkeeping
+        self.pad_index: int = 0
+        self.charge_started: Optional[float] = None
+        self.sorties: int = 0
+        self.min_battery_airborne: float = self.battery
+
+        # End-to-end connectivity to the GCS, written by the traffic layer.
+        # Starts True so that a simulation run without the traffic layer never
+        # trips the lost-link failsafe.
+        self.connected: bool = True
+        self.path_quality: float = 0.0
+        self.hops: int = 0
+        self.lost_link_s: float = 0.0
+
     @property
     def is_alive(self) -> bool:
-        return self.status not in (DroneStatus.KILLED, DroneStatus.LANDED)
+        """Airborne and part of the mesh."""
+        return self.status not in GROUND_STATUSES
+
+    @property
+    def on_pad(self) -> bool:
+        return self.status in (DroneStatus.CHARGING, DroneStatus.READY)
 
     @property
     def speed(self) -> float:
@@ -215,6 +249,8 @@ class Drone:
         self.battery -= drain * dt
         self.battery = max(0.0, self.battery)
 
+        self.min_battery_airborne = min(self.min_battery_airborne, self.battery)
+
         if self.battery <= 0:
             self.status = DroneStatus.LANDED
         elif self.battery < 15.0 and self.status == DroneStatus.ACTIVE:
@@ -234,12 +270,15 @@ class Drone:
         # place would misreport the mesh as still reaching through it.
         self.neighbors.clear()
         self.sensors.rssi.clear()
+        self.gcs_link = 0.0
+        self.connected = False
 
     def revive(self):
         """Revive a killed drone (for demo reset)."""
         self.status = DroneStatus.ACTIVE
         self.battery = max(self.battery, 80.0)
         self.altitude_offset_cmd = 0.0
+        self.radio_ok = True
 
     def set_target(self, position: np.ndarray, poi_id: Optional[str] = None):
         """Set waypoint target."""
@@ -315,6 +354,14 @@ class Drone:
             "ew_hold": bool(getattr(self, "ew_hold", False)),
             "manual_target": (self.manual_target.tolist()
                               if getattr(self, "manual_target", None) is not None else None),
+            "gcs_link": float(self.gcs_link),
+            "radio_ok": bool(self.radio_ok),
+            "connected": bool(self.connected),
+            "path_quality": float(self.path_quality),
+            "hops": int(self.hops),
+            "data_backlog": int(getattr(self, "data_backlog", 0)),
+            "sorties": int(self.sorties),
+            "handover_to": getattr(self, "handover_to", None),
         }
 
     def __repr__(self):

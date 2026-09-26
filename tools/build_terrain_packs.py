@@ -1,5 +1,5 @@
 """
-Build real-world terrain packs for C-DAWN.
+Build real-world terrain packs for the UAV-X simulator.
 
 For each theatre, downloads:
   - elevation from the AWS Open Data terrain tiles (Terrarium encoding;
@@ -19,7 +19,7 @@ recorded, so the dashboard can still show true north.
 
 Usage:
     python tools/build_terrain_packs.py            # all theatres
-    python tools/build_terrain_packs.py galwan     # one
+    python tools/build_terrain_packs.py uttarkashi # one
 """
 
 from __future__ import annotations
@@ -55,40 +55,6 @@ HR_MAX_PX = 4096      # cap for the Esri texture (GPU texture limit headroom)
 
 THEATRES = [
     {
-        "id": "galwan",
-        "name": "Galwan Valley",
-        "region": "Eastern Ladakh",
-        "lat": 34.755, "lon": 78.185,
-        "size_m": 5120.0, "dem_zoom": 13, "img_zoom": 14,
-        "snow_line_m": 5200.0,
-        "description": "High-altitude river valley on the Shyok–Galwan axis. "
-                       "Valley floor above 4,000 m, ridges to 5,500 m: thin air, "
-                       "deep terrain shadow, and long radio paths.",
-        "use_case": "Border surveillance, casualty evacuation relay",
-    },
-    {
-        "id": "kargil",
-        "name": "Dras – Tololing",
-        "region": "Kargil, Ladakh",
-        "lat": 34.445, "lon": 75.770,
-        "size_m": 5120.0, "dem_zoom": 13, "img_zoom": 14,
-        "snow_line_m": 4300.0,
-        "description": "Steep ridgelines above the Dras valley and the Srinagar–Leh "
-                       "highway. Classic line-of-sight denial terrain.",
-        "use_case": "Ridge-line observation, highway corridor security",
-    },
-    {
-        "id": "siachen",
-        "name": "Siachen Base",
-        "region": "Nubra, Ladakh",
-        "lat": 35.195, "lon": 77.190,
-        "size_m": 5120.0, "dem_zoom": 13, "img_zoom": 14,
-        "snow_line_m": 4600.0,
-        "description": "Glacier snout and Nubra river approach below the Siachen "
-                       "glacier. Glaciated valley, extreme cold and wind.",
-        "use_case": "Logistics relay, avalanche search and rescue",
-    },
-    {
         "id": "kedarnath",
         "name": "Kedarnath",
         "region": "Rudraprayag, Uttarakhand",
@@ -98,18 +64,42 @@ THEATRES = [
         "description": "Mandakini valley below Kedarnath — site of the 2013 flash "
                        "flood and debris flow. Narrow gorge, no ground access after "
                        "the road washes out.",
-        "use_case": "Flood / landslide disaster response, survivor search",
+        "use_case": "Landslide / debris-flow response, survivor search",
     },
     {
-        "id": "tawang",
-        "name": "Tawang",
-        "region": "Tawang, Arunachal Pradesh",
-        "lat": 27.588, "lon": 91.865,
+        "id": "uttarkashi",
+        "name": "Uttarkashi",
+        "region": "Uttarkashi, Uttarakhand",
+        "lat": 30.730, "lon": 78.445,
         "size_m": 5120.0, "dem_zoom": 13, "img_zoom": 14,
         "snow_line_m": 4500.0,
-        "description": "Forested, deeply dissected valleys of the Tawang Chu. "
-                       "Heavy cloud and vegetation: GNSS and radio are both degraded.",
-        "use_case": "Sector surveillance, landslide response",
+        "description": "Bhagirathi valley at Uttarkashi — epicentral area of the 1991 "
+                       "M6.8 earthquake, which destroyed villages along the valley "
+                       "walls and cut the road for days.",
+        "use_case": "Earthquake response: collapsed buildings, blocked roads",
+    },
+    {
+        "id": "joshimath",
+        "name": "Joshimath",
+        "region": "Chamoli, Uttarakhand",
+        "lat": 30.555, "lon": 79.565,
+        "size_m": 5120.0, "dem_zoom": 13, "img_zoom": 14,
+        "snow_line_m": 4300.0,
+        "description": "Alaknanda valley at Joshimath — the 2023 land-subsidence zone, "
+                       "upstream of the 2021 Chamoli rock-ice avalanche and flash flood.",
+        "use_case": "Landslide / subsidence damage survey",
+    },
+    {
+        "id": "chungthang",
+        "name": "Chungthang",
+        "region": "Mangan, Sikkim",
+        "lat": 27.603, "lon": 88.645,
+        "size_m": 5120.0, "dem_zoom": 13, "img_zoom": 14,
+        "snow_line_m": 4800.0,
+        "description": "Teesta valley at Chungthang — hit by the October 2023 South "
+                       "Lhonak glacial-lake outburst flood, which took out the dam, "
+                       "bridges and the highway.",
+        "use_case": "Flood / landslide response in a steep gorge",
     },
 ]
 

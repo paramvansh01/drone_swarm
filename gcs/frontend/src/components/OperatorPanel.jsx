@@ -1,26 +1,41 @@
 /**
  * Operator control toolbar.
  *
- * Floats over the 3D view so that deploying an aircraft is "pick a tool,
- * click the mountain" — the same gesture a judge would try first. Every action
+ * Floats over the 3D view so that reporting a new emergency is "pick a tool,
+ * click the valley" — the same gesture a judge would try first. Every action
  * goes to the simulation as a command; nothing here is scripted.
  */
 
 import { useState } from 'react';
 
 const TOOLS = [
-  { id: 'select', label: 'Select', hint: 'Click an aircraft, jammer or target to select it. Drag to orbit.' },
-  { id: 'add_scout', label: '+ Scout', hint: 'Click the terrain to deploy a scout. It will task itself to the nearest survey target.' },
-  { id: 'add_relay', label: '+ Relay', hint: 'Click the terrain to deploy a relay. The GNN will position it to hold the mesh together.' },
-  { id: 'add_poi', label: '+ Target', hint: 'Click the terrain to mark a survey target. An idle scout will be tasked to it.' },
-  { id: 'add_jammer', label: '+ Jammer', hint: 'Click the terrain to emplace a hostile jammer. Ridges between it and a drone block its signal.' },
+  { id: 'select', label: 'Select', hint: 'Click an aircraft, task or interference source to select it. Drag to orbit.' },
+  { id: 'add_poi', label: '+ Emergency', hint: 'Click the terrain to report a new priority-1 emergency. The swarm re-plans for it at once.' },
+  { id: 'add_interference', label: '+ Interference', hint: 'Click the terrain to open a communication-outage zone (RF interference). Ridges between it and an aircraft block it.' },
+  { id: 'add_scout', label: '+ UAV', hint: 'Click the terrain to deploy an extra scout there (testing aid; the fleet itself launches from the GCS pads).' },
 ];
 
-// Unobstructed distance at which a jammer lifts the noise floor to -82 dBm —
+// Unobstructed distance at which a source lifts the noise floor to -82 dBm —
 // mirrors RFChannel.jammer_radius_m (900 MHz free-space loss at 1 m = 31.5 dB).
-const jammerReach = (powerDbm) => 10 ** ((powerDbm + 3 + 82 - 31.53) / 20);
+const interferenceReach = (powerDbm) => 10 ** ((powerDbm + 3 + 82 - 31.53) / 20);
 
 const fmt = (v, d = 0) => (v === null || v === undefined || Number.isNaN(v) ? '—' : Number(v).toFixed(d));
+const clock = (s) => {
+  const v = Math.max(0, Math.floor(s || 0));
+  return `${Math.floor(v / 60)}:${String(v % 60).padStart(2, '0')}`;
+};
+
+const INJECTS = [
+  ['uav_failure', 'Fail relay', 'A relay UAV drops out of the sky', { target: 'relay' }],
+  ['uav_failure', 'Fail scout', 'A scout UAV drops out of the sky', { target: 'scout' }],
+  ['comm_outage', 'Radio out', "A scout's radio fails for 40 s", { target: 'scout', duration: 40 }],
+  ['comm_outage', 'GCS outage', 'The GCS receiver is down for 20 s', { gcs: true, duration: 20 }],
+  ['packet_loss', 'Packet loss', '30% loss on every link for 45 s', { rate: 0.3, duration: 45 }],
+  ['battery_fault', 'Battery fault', "A relay's power draw jumps", { target: 'relay' }],
+  ['heavy_rain', 'Heavy rain', 'Monsoon rain: turbulence, low cloud, wet antennas', {}],
+  ['storm_cell', 'Downdraught', 'A drifting mountain-wave cell with a 9 m/s sink', {}],
+  ['gps_denial', 'GNSS degraded', 'Valley multipath: the navigation solution drifts', {}],
+];
 
 export default function OperatorPanel({
   telemetry, tool, setTool, selected, setSelected, run,
@@ -42,39 +57,15 @@ export default function OperatorPanel({
 
   const ew = rf.ew || {};
   const fixes = ew.estimates || (ew.estimate ? [ew.estimate] : []);
-  const fix = fixes[0];
-  const magazine = demo.magazine ?? 0;
-  const interceptors = telemetry?.interceptors || [];
   const mission = telemetry?.mission || demo.mission || {};
   const injects = telemetry?.injects || {};
   const live = mission.phase === 'LIVE';
-  const pending = (mission.requests || []).filter((r) => r.status === 'PENDING');
-  const INJECTS = [
-    ['heavy_rain', 'Heavy rain', 'Convective rainfall: turbulence, wet antennas, degraded optics'],
-    ['storm_cell', 'Downdraught', 'Drifting mountain-wave cell with a 9 m/s sink'],
-    ['gps_denial', 'GNSS denial', 'Spoofing bubble: the navigation solution drifts'],
-    ['equipment_fault', 'Motor fault', 'Motor/ESC failure on one aircraft'],
-    ['enemy_uav', 'Hostile UAV', 'Enemy interceptor drone hunting the swarm'],
-  ];
-  const launchBlocked = !fix ? 'The swarm has not located the jammer yet — no fix to launch against.'
-    : magazine <= 0 ? 'No interceptors remaining.' : null;
-  const launchButton = (target) => (
-    <button
-      className="btn danger"
-      disabled={Boolean(launchBlocked)}
-      title={launchBlocked || 'Operator authorisation: launch a home-on-jam interceptor at the located jammer'}
-      onClick={() => run('launch_interceptor', target ? { emitter_id: target } : {})}
-    >
-      Authorise interceptor · {magazine} left
-    </button>
-  );
-  const PHASE_LABEL = {
-    LAUNCH: 'Climbing out', MIDCOURSE: 'Midcourse to fix', TERMINAL: 'Terminal — homing on emission',
-    REACQUIRE: 'Lock lost — reacquiring', LOITER: 'Loitering — no emission', HIT: 'TARGET DESTROYED',
-    TERRAIN: 'Missed — hit terrain', ABORTED: 'Aborted', ENDURANCE: 'Self-neutralised',
-  };
+  const planning = mission.phase === 'PLANNING';
 
-  const dead = drone?.status === 'KILLED';
+  const status = drone?.status;
+  const dead = status === 'KILLED';
+  const onPad = status === 'CHARGING' || status === 'READY';
+  const airborne = drone && !dead && !onPad && status !== 'LANDED';
   const scripted = demo.mode === 'scripted';
   const [minimised, setMinimised] = useState(false);
   const [showMore, setShowMore] = useState(false);
@@ -110,12 +101,12 @@ export default function OperatorPanel({
       </div>
       <div className="operator__hint">{activeTool?.hint}</div>
 
-      {(tool === 'add_jammer' || jammer) && (
+      {(tool === 'add_interference' || jammer) && (
         <div className="operator__row">
           <label>
-            Jammer power <b>{fmt(jammer ? jammer.power_dbm : jammerPower)} dBm</b>
+            Interference power <b>{fmt(jammer ? jammer.power_dbm : jammerPower)} dBm</b>
             <span className="operator__sub">
-              {' '}· reach ≈ {fmt(jammerReach(jammer ? jammer.power_dbm : jammerPower))} m in open air
+              {' '}· reach ≈ {fmt(interferenceReach(jammer ? jammer.power_dbm : jammerPower))} m in open air
             </span>
           </label>
           <input
@@ -135,24 +126,29 @@ export default function OperatorPanel({
         <div className="operator__card">
           <div className="operator__card-head">
             <b>{drone.id}</b>
-            <span className={`pill ${dead ? 'bad' : 'ok'}`}>{dead ? 'DOWN' : drone.status}</span>
+            <span className={`pill ${dead ? 'bad' : onPad ? 'warn' : 'ok'}`}>{dead ? 'FAILED' : status}</span>
           </div>
           <div className="operator__stats">
             <span>{drone.role.replace('_', ' ')}</span>
-            <span>{fmt(drone.agl)} m AGL</span>
+            {airborne && <span>{fmt(drone.agl)} m AGL</span>}
             <span>{fmt(drone.battery)}% batt</span>
-            <span>{drone.ew_hold ? 'EW WITHDRAWAL' : drone.manual_target ? 'OPERATOR ORDER' : 'AUTONOMOUS'}</span>
+            {airborne && (
+              <span>{!drone.radio_ok ? 'RADIO OUT' : drone.connected ? `${drone.hops} hop(s) to GCS` : 'NO LINK'}</span>
+            )}
+            {airborne && (
+              <span>{drone.ew_hold ? 'WITHDRAWN' : drone.manual_target ? 'OPERATOR ORDER' : 'AUTONOMOUS'}</span>
+            )}
           </div>
           <div className="operator__actions">
-            {!dead && (
+            {airborne && (
               <button className="btn" onClick={() => setTool('goto')}>Send to…</button>
             )}
-            {!dead && drone.manual_target && (
+            {airborne && drone.manual_target && (
               <button className="btn" onClick={() => run('release', { drone_id: drone.id })}>
                 Release to autonomy
               </button>
             )}
-            {!dead && drone.role !== 'GCS_RELAY' && (
+            {airborne && drone.role !== 'STANDBY' && (
               <button
                 className="btn"
                 onClick={() => run('set_role', {
@@ -162,14 +158,23 @@ export default function OperatorPanel({
                 Make {drone.role === 'SCOUT' ? 'relay' : 'scout'}
               </button>
             )}
-            <button className="btn" onClick={() => onFrame(drone.id)}>Frame camera</button>
-            {dead ? (
-              <button className="btn primary" onClick={() => run('revive', { drone_id: drone.id })}>
-                Relaunch
+            {airborne && (
+              <button className="btn" onClick={() => run('rth', { drone_id: drone.id })}>Return home</button>
+            )}
+            {status === 'READY' && live && (
+              <button className="btn" onClick={() => run('launch', { drone_id: drone.id, role: 'SCOUT' })}>
+                Launch as scout
               </button>
-            ) : (
+            )}
+            <button className="btn" onClick={() => onFrame(drone.id)}>Frame camera</button>
+            {dead && (
+              <button className="btn primary" onClick={() => run('revive', { drone_id: drone.id })}>
+                Return to service
+              </button>
+            )}
+            {airborne && (
               <button className="btn danger" onClick={() => run('kill', { drone_id: drone.id })}>
-                Take down
+                Fail UAV
               </button>
             )}
           </div>
@@ -179,22 +184,20 @@ export default function OperatorPanel({
       {jammer && (
         <div className="operator__card">
           <div className="operator__card-head">
-            <b>{jammer.id}</b><span className="pill bad">HOSTILE</span>
+            <b>{jammer.id}</b><span className="pill bad">INTERFERENCE</span>
           </div>
           {rf.ew?.estimate?.true_id === jammer.id && (
             <div className="operator__stats">
-              <span>Located by swarm ± {fmt(rf.ew.estimate.radius_m)} m</span>
+              <span>Localised by swarm ± {fmt(rf.ew.estimate.radius_m)} m</span>
               <span>estimate {fmt(rf.ew.estimate.error_m)} m off</span>
               <span>≈{fmt(rf.ew.estimate.power_dbm)} dBm est.</span>
             </div>
           )}
           <div className="operator__actions">
-            {launchButton(null)}
             <button className="btn" onClick={() => { run('remove_jammer', { jammer_id: jammer.id }); setSelected(null); }}>
-              Neutralise (ground team)
+              Switch off (ground team)
             </button>
           </div>
-          {launchBlocked && <div className="operator__hint">{launchBlocked}</div>}
         </div>
       )}
 
@@ -202,28 +205,39 @@ export default function OperatorPanel({
         <div className="operator__card">
           <div className="operator__card-head">
             <b>{poi.id}</b>
-            <span className={`pill ${poi.surveyed ? 'ok' : 'warn'}`}>{poi.surveyed ? 'SURVEYED' : 'PENDING'}</span>
+            <span className={`pill ${poi.delivered ? 'ok' : poi.surveyed ? 'warn' : 'bad'}`}>
+              {poi.delivered ? 'DATA AT GCS' : poi.surveyed ? 'SURVEYED' : 'PENDING'}
+            </span>
           </div>
-          <div className="operator__stats"><span>{poi.category}</span><span>priority {poi.priority}</span></div>
+          <div className="operator__stats">
+            <span>{poi.category.replace(/_/g, ' ')}</span>
+            <span>priority {poi.priority}</span>
+            {poi.emergent && <span>reported T+{fmt(poi.release_time)} s</span>}
+            {poi.surveyed_by && <span>by {poi.surveyed_by}</span>}
+          </div>
           <div className="operator__actions">
             <button className="btn" onClick={() => { run('remove_poi', { poi_id: poi.id }); setSelected(null); }}>
-              Cancel target
+              Cancel task
             </button>
           </div>
         </div>
       )}
 
-      {/* ---- mission phase ------------------------------------------- */}
+      {/* ---- mission ------------------------------------------------- */}
       <div className={`operator__card mission-card ${live ? 'mission-card--live' : ''}`}>
         <div className="operator__card-head">
-          <b>{live ? `LIVE MISSION · ${mission.mission_id || ''}` : 'PRE-MISSION REHEARSAL'}</b>
-          <span className={`pill ${live ? 'bad' : 'ok'}`}>{live ? 'COMMITTED' : 'TRAINING'}</span>
+          <b>{live ? `MISSION ${mission.mission_id || ''}` : planning ? 'MISSION PLANNING' : `MISSION ${mission.phase || ''}`}</b>
+          <span className={`pill ${live ? 'bad' : 'ok'}`}>
+            {live ? `${clock(mission.remaining_s)} LEFT` : planning ? 'ON PADS' : 'DONE'}
+          </span>
         </div>
-        {!live && (
+        {mission.scenario?.name && <div className="operator__sub">{mission.scenario.name}</div>}
+        {planning && (
           <>
             <div className="operator__sub">
-              The swarm is training against this theatre's terrain, wind and radio
-              conditions. Commit it when the rehearsal looks good.
+              {mission.tasks?.released ?? 0} task(s) known, {mission.time_limit_s ? `${clock(mission.time_limit_s)} allotted` : 'no time limit'}.
+              The fleet launches in sequence from the GCS pads; relays take stations as the
+              terrain requires.
             </div>
             <div className="operator__actions">
               <button className="btn primary" onClick={() => run('launch_mission')}>
@@ -235,15 +249,16 @@ export default function OperatorPanel({
         {live && (
           <>
             <div className="operator__stats">
-              <span>T+{Math.floor((mission.elapsed || 0) / 60)}:{String(Math.floor((mission.elapsed || 0) % 60)).padStart(2, '0')}</span>
-              <span>rehearsed PDR {fmt((mission.rehearsal?.backhaul_pdr ?? 0) * 100)}%</span>
-              <span>{mission.rehearsal?.relay_solves ?? 0} relay solves</span>
+              <span>{mission.tasks?.delivered ?? 0}/{mission.tasks?.released ?? 0} delivered</span>
+              <span>priority score {fmt((mission.priority_score ?? 0) * 100)}%</span>
+              <span>{mission.roles?.relays_needed ?? 0} relay(s) needed</span>
+              {mission.pending_disturbances > 0 && <span>{mission.pending_disturbances} scenario events to come</span>}
             </div>
-            <div className="operator__section">Inject (exercise control)</div>
+            <div className="operator__section">Inject a disturbance</div>
             <div className="inject-tools">
-              {INJECTS.map(([kind, label, hint]) => (
-                <button key={kind} className="tool" title={hint}
-                  onClick={() => run('inject', { kind })}>{label}</button>
+              {INJECTS.map(([kind, label, hint, params]) => (
+                <button key={`${kind}-${label}`} className="tool" title={hint}
+                  onClick={() => run('inject', { kind, ...params })}>{label}</button>
               ))}
             </div>
             <div className="operator__stats">
@@ -251,82 +266,41 @@ export default function OperatorPanel({
               {injects.cloud_base_agl && <span>cloud base {fmt(injects.cloud_base_agl)} m AGL</span>}
               {injects.nav_fallback && <span>terrain-relative nav</span>}
               {(injects.cells || []).length > 0 && <span>{injects.cells.length} cell(s)</span>}
-              {(injects.enemies || []).length > 0 && <span className="bad-text">{injects.enemies.length} hostile UAV</span>}
               {Object.keys(injects.faults || {}).length > 0 && <span>{Object.keys(injects.faults).join(', ')} degraded</span>}
             </div>
             <div className="operator__actions">
-              <button className="btn" onClick={() => run('clear_injects')}>Clear injects</button>
+              <button className="btn" onClick={() => run('clear_injects')}>Clear weather</button>
               <button className="btn" onClick={() => run('end_mission')}>End mission</button>
             </div>
           </>
         )}
-      </div>
-
-      {/* Support requests are authorised at the GROUND BASE, not here. The
-          field raises them; the base approves. Shown read-only for awareness. */}
-      {pending.length > 0 && (
-        <div className="operator__card operator__card--alert">
-          <div className="operator__card-head">
-            <b>Awaiting base authority</b><span className="pill bad">{pending.length}</span>
+        {!live && !planning && (
+          <div className="operator__actions">
+            <button className="btn primary" onClick={() => run('reset_mission')}>Back to planning</button>
           </div>
-          {pending.map((r) => (
-            <div key={r.id} className="operator__sub" style={{ marginTop: 4 }}>
-              <b>{r.id} · {r.kind.replace(/_/g, ' ')}</b> — {r.reason}
-            </div>
-          ))}
-        </div>
-      )}
+        )}
+      </div>
 
       {fixes.length > 0 && !jammer && (
         <div className="operator__card operator__card--alert">
           <div className="operator__card-head">
-            <b>{fixes.length > 1 ? `${fixes.length} hostile emitters located` : 'Hostile jammer located'}</b>
-            <span className="pill bad">EW</span>
+            <b>{fixes.length > 1 ? `${fixes.length} interference sources localised` : 'Interference source localised'}</b>
+            <span className="pill bad">COMMS</span>
           </div>
           {fixes.map((e) => (
-            <div key={e.id} className="interceptor-row">
-              <div>
-                <b>{e.id}</b>
-                <div className="operator__sub">
-                  grid ({fmt(e.x)}, {fmt(e.y)}) · ± {fmt(e.radius_m)} m · ≈{fmt(e.power_dbm)} dBm
-                  {e.sensors ? ` · ${e.sensors}-aircraft cross-fix` : ''}
-                </div>
-              </div>
-              {launchButton(e.id)}
+            <div key={e.id} className="operator__sub" style={{ marginTop: 4 }}>
+              <b>{e.id}</b> grid ({fmt(e.x)}, {fmt(e.y)}) · ± {fmt(e.radius_m)} m · ≈{fmt(e.power_dbm)} dBm
+              {e.sensors ? ` · ${e.sensors}-aircraft cross-fix` : ''}
             </div>
           ))}
-        </div>
-      )}
-
-      {interceptors.length > 0 && (
-        <div className="operator__card">
-          <div className="operator__card-head">
-            <b>Interceptors</b><span className="pill warn">{magazine}/{demo.magazine_size ?? 2} in magazine</span>
+          <div className="operator__sub" style={{ marginTop: 4 }}>
+            Scouts inside it withdraw to regain the link; the relay planner routes around it.
           </div>
-          {interceptors.map((u) => (
-            <div key={u.id} className="interceptor-row">
-              <div>
-                <b>{u.id}</b>{' '}
-                <span className={`interceptor-row__phase ${u.outcome === 'HIT' ? 'ok' : u.done ? 'bad' : ''}`}>
-                  {u.phase === 'TERMINAL' && u.locked_on && !String(u.locked_on).startsWith('JAM')
-                    ? `Terminal — closing on ${u.locked_on}`
-                    : (PHASE_LABEL[u.phase] || u.phase)}
-                </span>
-                <div className="operator__sub">
-                  {fmt(u.speed)} m/s · {fmt(u.range_m)} m to fix
-                  {u.seeker_dbm != null && ` · seeker ${fmt(u.seeker_dbm)} dBm`}
-                </div>
-              </div>
-              {!u.done && (
-                <button className="btn" onClick={() => run('abort_interceptor', { interceptor_id: u.id })}>Abort</button>
-              )}
-            </div>
-          ))}
         </div>
       )}
 
       <button className="operator__more" onClick={() => setShowMore(!showMore)}>
-        {showMore ? '▾ Hide weather & mission' : '▸ Weather & mission'}
+        {showMore ? '▾ Hide weather & reports' : '▸ Weather & reports'}
       </button>
 
       {showMore && (<>
@@ -346,18 +320,19 @@ export default function OperatorPanel({
       <div className="operator__actions">
         <button className="btn" onClick={() => run('gust', { magnitude: 13 })}>Trigger gust</button>
         {(rf.jammers || []).length > 0 && (
-          <button className="btn" onClick={() => run('clear_jammers')}>Clear all jammers</button>
+          <button className="btn" onClick={() => run('clear_jammers')}>Clear interference</button>
         )}
       </div>
 
-      {/* ---- mission ---------------------------------------------------- */}
-      <div className="operator__section">Mission</div>
+      {/* ---- reports ---------------------------------------------------- */}
+      <div className="operator__section">Reports</div>
       <div className="operator__actions">
         <button className="btn" onClick={() => run('sitrep')}>Generate SITREP</button>
+        <a className="btn" href="/api/summary" target="_blank" rel="noreferrer">Mission metrics (JSON)</a>
         {scripted ? (
-          <button className="btn" onClick={() => run('stop_scenario')}>Stop scripted run</button>
+          <button className="btn" onClick={() => run('stop_scenario')}>Stop scripted demo</button>
         ) : (
-          <button className="btn" onClick={() => run('run_scenario')}>Run scripted 4-phase demo</button>
+          <button className="btn" onClick={() => run('run_scenario')}>Run scripted demo</button>
         )}
       </div>
       </>)}

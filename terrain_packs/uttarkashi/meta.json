@@ -1,0 +1,42 @@
+{
+  "id": "uttarkashi",
+  "name": "Uttarkashi",
+  "region": "Uttarkashi, Uttarakhand",
+  "lat": 30.73,
+  "lon": 78.445,
+  "size_m": 5120.0,
+  "snow_line_m": 4500.0,
+  "description": "Bhagirathi valley at Uttarkashi \u2014 epicentral area of the 1991 M6.8 earthquake, which destroyed villages along the valley walls and cut the road for days.",
+  "use_case": "Earthquake response: collapsed buildings, blocked roads",
+  "resolution": 1025,
+  "context_size_m": 35840.0,
+  "context_resolution": 513,
+  "min_height_m": 1084.4345703125,
+  "max_height_m": 2166.719482421875,
+  "rotation_k": 0,
+  "north_bearing_deg": 90.0,
+  "inner_bounds": [
+    30.70700038558576,
+    30.752994127336542,
+    78.41824653674371,
+    78.47175346325628
+  ],
+  "context_bounds": [
+    30.568887605021537,
+    30.890843528975655,
+    78.257725757206,
+    78.63227424279404
+  ],
+  "sources": {
+    "elevation": "AWS Open Data Terrain Tiles (Terrarium; SRTM/Copernicus-derived)",
+    "imagery": "Sentinel-2 cloudless - https://s2maps.eu by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2016), CC BY 4.0",
+    "imagery_hr": "Esri World Imagery \u2014 Esri, Maxar, Earthstar Geographics, and the GIS User Community (local cache, not redistributed)"
+  },
+  "built": "2026-09-26",
+  "mid_bounds": [
+    30.008680883099196,
+    31.44596096865244,
+    77.60895427324101,
+    79.28104572675898
+  ]
+}

@@ -63,7 +63,7 @@ class DifferentiableRF:
         # Weather loss on the link budget (wet antennas/radome in rain), set
         # by the optimiser from the live channel state.
         self.extra_loss_db = 0.0
-        # Located hostile emitters: [(position [3] tensor, power_dbm)]. Set by
+        # Localised interference sources: [(position [3] tensor, power_dbm)]. Set by
         # the relay optimiser from the EW geolocation; empty otherwise.
         self.emitters = []
 

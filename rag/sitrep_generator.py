@@ -144,7 +144,9 @@ class SitrepGenerator:
 
         pdr_line = f"{pdr:.1%}" if pdr is not None else "not reported"
         battery_line = f"{battery:.1f}%" if battery is not None else "not reported"
-        survey_line = (f"{pois_surveyed}/{total_pois} Points of Interest"
+        delivered = metrics.get("pois_delivered")
+        survey_line = (f"{pois_surveyed}/{total_pois} Points of Interest surveyed"
+                       + (f", {delivered} with data delivered to the GCS" if delivered is not None else "")
                        if pois_surveyed is not None and total_pois else "not reported")
 
         recommendations = []
@@ -179,30 +181,30 @@ class SitrepGenerator:
                     f"Intervention recommended."
                 )
 
-        # Electronic warfare: only what the swarm measured and inferred
-        ew_summary = "No hostile emitters detected."
+        # RF interference: only what the swarm measured and inferred
+        ew_summary = "No RF interference detected."
         if ew_state and ew_state.get("active"):
             located = ew_state.get("estimates") or ([ew_state["estimate"]]
                                                     if ew_state.get("estimate") else [])
             est = located[0] if located else None
             if len(located) > 1:
-                ew_summary = (f"{len(located)} HOSTILE EMITTERS geolocated: " + "; ".join(
+                ew_summary = (f"{len(located)} INTERFERENCE SOURCES localised: " + "; ".join(
                     f"{e.get('id', 'emitter')} at grid ({e['x']:.0f}, {e['y']:.0f}) "
                     f"± {e['radius_m']:.0f} m, est. {e['power_dbm']:.0f} dBm" for e in located) + ".")
                 recommendations.insert(0, (
-                    f"PRIORITY: Neutralise {len(located)} hostile emitters — "
+                    f"PRIORITY: Ground team to switch off {len(located)} interference sources — "
                     + "; ".join(f"({e['x']:.0f}, {e['y']:.0f})" for e in located) + "."))
             elif est:
                 ew_summary = (
-                    f"HOSTILE JAMMER geolocated at grid ({est['x']:.0f}, {est['y']:.0f}) "
+                    f"RF INTERFERENCE source localised at grid ({est['x']:.0f}, {est['y']:.0f}) "
                     f"± {est['radius_m']:.0f} m, est. {est['power_dbm']:.0f} dBm "
                     f"(fix from {est['sensors']} aircraft noise-floor readings).")
                 recommendations.insert(0, (
-                    f"PRIORITY: Neutralise hostile emitter at grid ({est['x']:.0f}, "
+                    f"PRIORITY: Ground team to switch off the interference source at grid ({est['x']:.0f}, "
                     f"{est['y']:.0f}) ± {est['radius_m']:.0f} m."))
             else:
-                ew_summary = (f"Jamming detected at {len(ew_state.get('jammed_nodes') or [])} "
-                              "aircraft; source not yet located.")
+                ew_summary = (f"Interference at {len(ew_state.get('jammed_nodes') or [])} "
+                              "aircraft; source not yet localised.")
             if ew_state.get("withdrawn"):
                 ew_summary += f" Withdrawn to regain link: {', '.join(ew_state['withdrawn'])}."
             if ew_state.get("denied_pois"):
@@ -227,7 +229,7 @@ class SitrepGenerator:
 
 3. COMMUNICATIONS ASSESSMENT
    {causal_summary}
-   EW: {ew_summary}
+   Interference: {ew_summary}
 
 4. RECOMMENDATIONS
    {(chr(10) + "   ").join(recommendations)}

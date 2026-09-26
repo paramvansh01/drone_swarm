@@ -1,0 +1,571 @@
+{
+  "theatre": {
+    "id": "synthetic",
+    "name": "Nanda Devi Sanctuary",
+    "region": "Garhwal Himalaya \u00b7 procedural training model",
+    "lat": 30.376,
+    "lon": 79.971,
+    "north_bearing_deg": 90.0,
+    "rotation_k": 0,
+    "description": "Our original procedurally generated glaciated valley, placed at the Nanda Devi Sanctuary. The terrain is synthetic \u2014 built for training and repeatable benchmarks \u2014 not a survey of the real sanctuary.",
+    "use_case": "Training, repeatable benchmarks",
+    "synthetic": true,
+    "sources": {
+      "elevation": "procedural (ridged multifractal)"
+    },
+    "inner_bounds": [
+      30.357602587136185,
+      30.394397412863817,
+      79.94967524308194,
+      79.99232475691807
+    ]
+  },
+  "gcs": {
+    "id": "GCS",
+    "position": [
+      143.36,
+      2246.3167072510387,
+      638.2700289440236
+    ],
+    "mast_m": 10.0,
+    "pads": [
+      [
+        168.36,
+        2236.3167072510387,
+        628.8826726772758
+      ],
+      [
+        168.36,
+        2256.3167072510387,
+        628.7093544606524
+      ],
+      [
+        184.36,
+        2236.3167072510387,
+        628.3469151194383
+      ],
+      [
+        184.36,
+        2256.3167072510387,
+        628.2390684386771
+      ],
+      [
+        200.36,
+        2236.3167072510387,
+        627.849920010387
+      ],
+      [
+        200.36,
+        2256.3167072510387,
+        627.9131168272912
+      ],
+      [
+        216.36,
+        2236.3167072510387,
+        627.3762765174481
+      ],
+      [
+        216.36,
+        2256.3167072510387,
+        627.5045036344752
+      ],
+      [
+        232.36,
+        2236.3167072510387,
+        626.8490525749698
+      ],
+      [
+        232.36,
+        2256.3167072510387,
+        626.880359333011
+      ],
+      [
+        248.36,
+        2236.3167072510387,
+        626.5837085676353
+      ],
+      [
+        248.36,
+        2256.3167072510387,
+        626.5245831875311
+      ]
+    ]
+  },
+  "geofence": {
+    "polygon": [
+      [
+        40.0,
+        1484.1717915218787
+      ],
+      [
+        210.19478260869565,
+        1564.7556961790242
+      ],
+      [
+        380.3895652173913,
+        1551.2303029227842
+      ],
+      [
+        550.584347826087,
+        1509.2994883535457
+      ],
+      [
+        720.7791304347826,
+        1504.8462479076452
+      ],
+      [
+        890.9739130434782,
+        1544.0600452426647
+      ],
+      [
+        1061.168695652174,
+        1567.883162786421
+      ],
+      [
+        1231.3634782608694,
+        1505.4554794409742
+      ],
+      [
+        1401.5582608695652,
+        1341.4558461548675
+      ],
+      [
+        1571.753043478261,
+        1140.0189309981592
+      ],
+      [
+        1741.9478260869564,
+        1003.5063297591901
+      ],
+      [
+        1912.1426086956521,
+        998.3529477013092
+      ],
+      [
+        2082.337391304348,
+        1107.7393466092437
+      ],
+      [
+        2252.5321739130436,
+        1249.0723852563146
+      ],
+      [
+        2422.726956521739,
+        1341.1765832911292
+      ],
+      [
+        2592.9217391304346,
+        1365.6491045563616
+      ],
+      [
+        2763.1165217391303,
+        1372.4532071667631
+      ],
+      [
+        2933.311304347826,
+        1426.722043193246
+      ],
+      [
+        3103.506086956522,
+        1542.885993716941
+      ],
+      [
+        3273.700869565217,
+        1662.7734437583063
+      ],
+      [
+        3443.895652173913,
+        1697.518185158358
+      ],
+      [
+        3614.0904347826086,
+        1599.5504319011202
+      ],
+      [
+        3784.2852173913043,
+        1405.2081464378339
+      ],
+      [
+        3954.48,
+        1212.0760653431662
+      ],
+      [
+        3954.48,
+        2612.076065343166
+      ],
+      [
+        3784.2852173913043,
+        2805.208146437834
+      ],
+      [
+        3614.0904347826086,
+        2999.55043190112
+      ],
+      [
+        3443.895652173913,
+        3097.518185158358
+      ],
+      [
+        3273.700869565217,
+        3062.7734437583063
+      ],
+      [
+        3103.506086956522,
+        2942.885993716941
+      ],
+      [
+        2933.311304347826,
+        2826.722043193246
+      ],
+      [
+        2763.1165217391303,
+        2772.453207166763
+      ],
+      [
+        2592.9217391304346,
+        2765.6491045563616
+      ],
+      [
+        2422.726956521739,
+        2741.176583291129
+      ],
+      [
+        2252.5321739130436,
+        2649.0723852563146
+      ],
+      [
+        2082.337391304348,
+        2507.7393466092435
+      ],
+      [
+        1912.1426086956521,
+        2398.352947701309
+      ],
+      [
+        1741.9478260869564,
+        2403.50632975919
+      ],
+      [
+        1571.753043478261,
+        2540.0189309981592
+      ],
+      [
+        1401.5582608695652,
+        2741.4558461548677
+      ],
+      [
+        1231.3634782608694,
+        2905.455479440974
+      ],
+      [
+        1061.168695652174,
+        2967.883162786421
+      ],
+      [
+        890.9739130434782,
+        2944.0600452426647
+      ],
+      [
+        720.7791304347826,
+        2904.846247907645
+      ],
+      [
+        550.584347826087,
+        2909.2994883535457
+      ],
+      [
+        380.3895652173913,
+        2951.230302922784
+      ],
+      [
+        210.19478260869565,
+        2964.755696179024
+      ],
+      [
+        40.0,
+        2884.1717915218787
+      ]
+    ],
+    "max_agl": 400.0
+  },
+  "time_limit_s": 900.0,
+  "tasks": [
+    {
+      "id": "POI-001",
+      "position": [
+        459.9439608464633,
+        2283.175504341865,
+        636.1544086572973
+      ],
+      "category": "trapped_survivors",
+      "priority": 2,
+      "surveyed": true,
+      "surveyed_by": "UAV-2",
+      "surveyed_at": 32.09999999999942,
+      "release_time": 0.0,
+      "emergent": false,
+      "region": null,
+      "delivered": true,
+      "delivered_at": 32.705599999999514
+    },
+    {
+      "id": "POI-002",
+      "position": [
+        828.5760603470803,
+        2129.510120007171,
+        645.5191536325933
+      ],
+      "category": "flooded_area",
+      "priority": 2,
+      "surveyed": true,
+      "surveyed_by": "UAV-3",
+      "surveyed_at": 50.5400000000023,
+      "release_time": 0.0,
+      "emergent": false,
+      "region": null,
+      "delivered": true,
+      "delivered_at": 51.10560000000239
+    },
+    {
+      "id": "POI-003",
+      "position": [
+        1339.9942866246263,
+        2214.493029791189,
+        664.8223154042117
+      ],
+      "category": "flooded_area",
+      "priority": 3,
+      "surveyed": true,
+      "surveyed_by": "UAV-3",
+      "surveyed_at": 89.75999999999928,
+      "release_time": 0.0,
+      "emergent": false,
+      "region": null,
+      "delivered": true,
+      "delivered_at": 90.30559999999917
+    },
+    {
+      "id": "POI-004",
+      "position": [
+        1693.1092330478095,
+        1736.6676965471097,
+        674.5634007768662
+      ],
+      "category": "flooded_area",
+      "priority": 3,
+      "surveyed": true,
+      "surveyed_by": "UAV-4",
+      "surveyed_at": 259.5800000000539,
+      "release_time": 0.0,
+      "emergent": false,
+      "region": null,
+      "delivered": true,
+      "delivered_at": 260.1112000000534
+    },
+    {
+      "id": "POI-005",
+      "position": [
+        2095.3238984713685,
+        1826.889101078313,
+        687.6231475139597
+      ],
+      "category": "flooded_area",
+      "priority": 2,
+      "surveyed": true,
+      "surveyed_by": "UAV-3",
+      "surveyed_at": 153.36000000000465,
+      "release_time": 0.0,
+      "emergent": false,
+      "region": null,
+      "delivered": true,
+      "delivered_at": 153.9056000000049
+    },
+    {
+      "id": "POI-006",
+      "position": [
+        2548.8057420932473,
+        2169.2452526521056,
+        704.416610678642
+      ],
+      "category": "damaged_bridge",
+      "priority": 2,
+      "surveyed": true,
+      "surveyed_by": "UAV-4",
+      "surveyed_at": 163.82000000001,
+      "release_time": 0.0,
+      "emergent": false,
+      "region": null,
+      "delivered": true,
+      "delivered_at": 164.4112000000103
+    },
+    {
+      "id": "POI-007",
+      "position": [
+        3062.847083629491,
+        2166.825478987086,
+        718.4118261019335
+      ],
+      "category": "trapped_survivors",
+      "priority": 2,
+      "surveyed": true,
+      "surveyed_by": "UAV-2",
+      "surveyed_at": 181.88000000001924,
+      "release_time": 0.0,
+      "emergent": false,
+      "region": null,
+      "delivered": true,
+      "delivered_at": 206.01120000003158
+    },
+    {
+      "id": "POI-008",
+      "position": [
+        3461.543645356217,
+        2472.6187184797577,
+        730.8135007554891
+      ],
+      "category": "collapsed_building",
+      "priority": 2,
+      "surveyed": true,
+      "surveyed_by": "UAV-3",
+      "surveyed_at": 235.84000000004684,
+      "release_time": 0.0,
+      "emergent": false,
+      "region": null,
+      "delivered": true,
+      "delivered_at": 236.41120000004713
+    },
+    {
+      "id": "POI-009",
+      "position": [
+        2102.272,
+        1914.516658119278,
+        688.0954857368547
+      ],
+      "category": "trapped_survivors",
+      "priority": 1,
+      "surveyed": true,
+      "surveyed_by": "UAV-4",
+      "surveyed_at": 129.7999999999926,
+      "release_time": 60.00000000000378,
+      "emergent": true,
+      "region": null,
+      "delivered": true,
+      "delivered_at": 130.4111999999929
+    },
+    {
+      "id": "POI-010",
+      "position": [
+        1601.536,
+        1748.694310249954,
+        673.9315914773216
+      ],
+      "category": "collapsed_building",
+      "priority": 1,
+      "surveyed": true,
+      "surveyed_by": "UAV-2",
+      "surveyed_at": 421.2799999999068,
+      "release_time": 379.99999999994435,
+      "emergent": true,
+      "region": "REGION-1",
+      "delivered": true,
+      "delivered_at": 421.8111999999063
+    },
+    {
+      "id": "POI-011",
+      "position": [
+        1656.6903289325508,
+        1803.8486391825047,
+        674.4266967811278
+      ],
+      "category": "collapsed_building",
+      "priority": 1,
+      "surveyed": true,
+      "surveyed_by": "UAV-3",
+      "surveyed_at": 425.63999999990284,
+      "release_time": 379.99999999994435,
+      "emergent": true,
+      "region": "REGION-1",
+      "delivered": true,
+      "delivered_at": 426.2111999999023
+    },
+    {
+      "id": "POI-012",
+      "position": [
+        1546.3816710674494,
+        1803.8486391825047,
+        670.3006581975972
+      ],
+      "category": "collapsed_building",
+      "priority": 1,
+      "surveyed": true,
+      "surveyed_by": "UAV-2",
+      "surveyed_at": 406.07999999992063,
+      "release_time": 379.99999999994435,
+      "emergent": true,
+      "region": "REGION-1",
+      "delivered": true,
+      "delivered_at": 406.61119999992013
+    },
+    {
+      "id": "POI-013",
+      "position": [
+        1546.3816710674494,
+        1693.5399813174033,
+        669.7894175153851
+      ],
+      "category": "collapsed_building",
+      "priority": 1,
+      "surveyed": true,
+      "surveyed_by": "UAV-4",
+      "surveyed_at": 450.79999999987996,
+      "release_time": 379.99999999994435,
+      "emergent": true,
+      "region": "REGION-1",
+      "delivered": true,
+      "delivered_at": 451.4111999998794
+    },
+    {
+      "id": "POI-014",
+      "position": [
+        1656.6903289325508,
+        1693.5399813174033,
+        675.950286806973
+      ],
+      "category": "collapsed_building",
+      "priority": 1,
+      "surveyed": true,
+      "surveyed_by": "UAV-2",
+      "surveyed_at": 436.5599999998929,
+      "release_time": 379.99999999994435,
+      "emergent": true,
+      "region": "REGION-1",
+      "delivered": true,
+      "delivered_at": 437.1111999998924
+    },
+    {
+      "id": "POI-015",
+      "position": [
+        1100.8,
+        2312.9042918304176,
+        654.3906824138178
+      ],
+      "category": "trapped_survivors",
+      "priority": 1,
+      "surveyed": true,
+      "surveyed_by": "UAV-3",
+      "surveyed_at": 723.5999999996319,
+      "release_time": 599.9999999997443,
+      "emergent": true,
+      "region": null,
+      "delivered": true,
+      "delivered_at": 724.2055999996313
+    }
+  ],
+  "fleet": [
+    "UAV-1",
+    "UAV-2",
+    "UAV-3",
+    "UAV-4",
+    "UAV-5"
+  ]
+}

@@ -53,3 +53,6 @@ terrain_packs/*/*_hr.jpg
 terrain_packs/_tiles/
 data/weather/
 !data/weather/fitted_model.json
+
+# Mission logs from run_scenario.py / run_node.py --log-dir (results/sample_logs is committed)
+logs/
