@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>C-DAWN Technical Report</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;0,8..60,700;1,8..60,400&family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  @page {
+    size: A4;
+    margin: 16mm 13mm 15mm 13mm;
+    border: 0.7pt solid #a9a69c;
+    padding: 4mm 4.5mm;
+    @top-left { content: "C-DAWN: a connected, battery-aware UAV swarm for disaster valleys"; font: italic 7.5pt "Source Serif 4", serif; color: #6b6a64; }
+    @top-right { content: "PUSHPAK Grand Challenge 2026 · UAV-X · Stage 1"; font: 7.5pt "Source Sans 3", sans-serif; color: #6b6a64; }
+    @bottom-center { content: counter(page) " / " counter(pages); font: 7.5pt "Source Sans 3", sans-serif; color: #6b6a64; }
+  }
+  @page :first { @top-left { content: none; } @top-right { content: none; } }
+  :root { --ink: #1b1b19; --ink2: #4d4c47; --rule: #b9b6ad; --faint: #efede7; --blue: #2a78d6; --orange: #eb6834; --violet: #4a3aa7; }
+  * { box-sizing: border-box; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { margin: 0; font-family: "Source Serif 4", Georgia, serif; font-size: 8.9pt; line-height: 1.34; color: var(--ink); background: #fff; font-variant-numeric: lining-nums; hyphens: auto; text-align: justify; }
+
+  header.title { text-align: center; margin: 0 0 3.2mm; padding-bottom: 3mm; border-bottom: 1.1pt solid var(--ink); }
+  .kicker { font: 600 7.4pt "Source Sans 3", sans-serif; letter-spacing: 1.4pt; text-transform: uppercase; color: var(--ink2); margin-bottom: 2.2mm; }
+  h1 { font-size: 17.5pt; line-height: 1.15; margin: 0 0 2.2mm; font-weight: 700; letter-spacing: -0.2pt; }
+  .authors { font-size: 9.6pt; margin-bottom: 0.8mm; }
+  .affil { font-size: 8pt; color: var(--ink2); font-style: italic; }
+  .abstract { display: grid; grid-template-columns: 1fr; margin: 0 0 3.5mm; padding: 2.6mm 3.4mm; background: var(--faint); border-left: 2.4pt solid var(--ink); font-size: 8.6pt; }
+  .abstract b.lab { font-family: "Source Sans 3", sans-serif; letter-spacing: 0.6pt; text-transform: uppercase; font-size: 7.6pt; }
+  .keywords { margin-top: 1.3mm; font-size: 7.9pt; color: var(--ink2); }
+
+  .cols { column-count: 2; column-gap: 6mm; column-rule: 0.3pt solid #d6d3ca; }
+  h2 { font: 700 8.9pt "Source Sans 3", sans-serif; letter-spacing: 1.1pt; text-transform: uppercase; margin: 3.6mm 0 1.4mm; padding-bottom: 0.6mm; border-bottom: 0.5pt solid var(--rule); break-after: avoid; text-align: left; }
+  h3 { font: italic 600 9pt "Source Serif 4", serif; margin: 2.4mm 0 0.8mm; break-after: avoid; text-align: left; }
+  p { margin: 0 0 1.7mm; text-indent: 0; orphans: 3; widows: 3; }
+  p + p { text-indent: 3.2mm; }
+  ol, ul { margin: 0.6mm 0 1.8mm; padding-left: 4.6mm; }
+  li { margin-bottom: 0.7mm; }
+  code { hyphens: none; white-space: nowrap; }
+  code, .mono { font-family: "SFMono-Regular", Menlo, Consolas, monospace; font-size: 7.4pt; background: #f3f1ea; padding: 0 0.6mm; border-radius: 1px; }
+  a { color: inherit; text-decoration: none; }
+
+  figure { margin: 2mm 0 2.6mm; break-inside: avoid; text-align: center; }
+  figure.wide { column-span: all; margin: 1.4mm 0 3.2mm; }
+  figure img, figure svg { max-width: 100%; height: auto; display: block; margin: 0 auto; }
+  figcaption { font-size: 7.7pt; line-height: 1.3; text-align: justify; margin-top: 1.2mm; color: var(--ink); }
+  figcaption b { font-family: "Source Sans 3", sans-serif; font-size: 7.6pt; }
+  .figbox { border: 0.5pt solid var(--rule); padding: 1.6mm; background: #fff; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 7.5pt; line-height: 1.25; margin: 0.6mm 0 0; text-align: left; }
+  caption { caption-side: top; font-size: 7.7pt; text-align: left; margin-bottom: 1mm; }
+  caption b { font-family: "Source Sans 3", sans-serif; }
+  thead th { font: 700 7.2pt "Source Sans 3", sans-serif; text-transform: uppercase; letter-spacing: 0.4pt; border-top: 1.1pt solid var(--ink); border-bottom: 0.6pt solid var(--ink); padding: 1mm 1.2mm; vertical-align: bottom; }
+  tbody td { padding: 0.8mm 1.2mm; border-bottom: 0.3pt solid #dedbd2; vertical-align: top; }
+  tbody tr:last-child td { border-bottom: 1.1pt solid var(--ink); }
+  td.mono { hyphens: none; white-space: nowrap; background: none; font-size: 6.9pt; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .tblwrap { break-inside: avoid; margin: 2mm 0 2.6mm; }
+  .tblwrap.wide { column-span: all; }
+  .win { font-weight: 600; }
+
+  .eq { display: flex; align-items: center; justify-content: space-between; margin: 1.3mm 0 1.8mm; font-style: italic; text-align: center; font-size: 8.5pt; }
+  .eq .body div { margin: 0.4mm 0; }
+  .eq .body { flex: 1; text-align: center; }
+  .eq .no { font-style: normal; font-size: 8pt; color: var(--ink2); }
+  .eq sub, .eq sup { font-size: 70%; }
+  .up { font-style: normal; }
+  .note { font-size: 7.8pt; color: var(--ink2); }
+  .algo { border-top: 1pt solid var(--ink); border-bottom: 1pt solid var(--ink); padding: 1.2mm 1.6mm; margin: 2mm 0 2.4mm; font-size: 7.7pt; line-height: 1.34; break-inside: avoid; text-align: left; }
+  .algo .t { font: 700 7.6pt "Source Sans 3", sans-serif; border-bottom: 0.5pt solid var(--ink); padding-bottom: 0.6mm; margin-bottom: 0.8mm; }
+  .algo ol { margin: 0; padding-left: 4.4mm; }
+  .algo li { margin: 0.2mm 0; }
+  .kw { font-weight: 700; }
+  pre.cmds { font-family: "SFMono-Regular", Menlo, Consolas, monospace; font-size: 6.6pt; line-height: 1.4; background: #f3f1ea; border-left: 1.6pt solid var(--ink); padding: 1.4mm 2mm; margin: 1.2mm 0 2mm; white-space: pre; overflow: hidden; break-inside: avoid; text-align: left; }
+  pre.cmds .c { color: #6b6a64; }
+  .refs { font-size: 7.3pt; line-height: 1.28; padding-left: 5mm; }
+  .refs li { margin-bottom: 0.6mm; text-align: left; }
+  svg text { font-family: "Source Sans 3", Arial, sans-serif; }
+  .pb { break-before: column; }
+</style>
+</head>
+<body>
+
+<header class="title">
+  <div class="kicker">Technical Report · Stage 1 · PUSHPAK Grand Challenge 2026 · Grand Challenge 1: UAV-X</div>
+  <h1>C-DAWN: Keeping a Battery-Limited UAV Swarm Connected<br>While It Surveys a Himalayan Disaster Valley</h1>
+  <div class="authors">Team C-DAWN &nbsp;·&nbsp; [Member names] &nbsp;·&nbsp; [Institution, City]</div>
+  <div class="affil">Source code: github.com/paramvansh01/drone_swarm &nbsp;·&nbsp; Simulation track &nbsp;·&nbsp; Report date: 26 September 2026</div>
+</header>
+
+<section class="abstract">
+  <div><b class="lab">Abstract.</b> When an earthquake or a landslide cuts the road and the towers in a Himalayan valley, the first hours depend on two things: getting eyes on the damaged sites, and getting what those eyes see back to the people coordinating the response. We built C-DAWN, a simulation-first autonomy stack for a fleet of battery-limited quadrotors that fly from a ground control station (GCS) set up outside the affected area. The swarm works out from the terrain how many relays it needs, decides which aircraft fly relay and which survey, hands a relay station to a fresh aircraft <i>before</i> the tired one leaves to swap its battery, and drops lower-priority work when a new emergency is reported. It is never told about a failure, an outage or a fault. It notices them from heartbeats, acknowledgements, noise readings and battery current, the same evidence a fielded swarm would have. We tested it on four scenarios, two of them on real terrain at Kedarnath and Uttarkashi, each with 4 to 11 hidden disturbances. C-DAWN delivered 97.3% of survey tasks, 96.7% of packets and 95.3% connectivity. A fixed-role baseline managed 87.8%, 91.6% and 88.6%. Neither had a collision, a geofence violation or a flat battery in any run.</div>
+  <div class="keywords"><b>Keywords:</b> UAV swarm, BVLOS, multi-hop relay, disaster response, energy-aware planning, fault recovery, delay-tolerant networking, terrain-aware RF</div>
+</section>
+
+<figure class="wide">
+<div class="figbox">
+<svg viewBox="0 0 1000 300" role="img" aria-label="Illustration of the C-DAWN swarm: a ground control station at the valley mouth, a relay chain of UAVs following the valley, scouts surveying priority sites, an interference zone and a cloud layer.">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#dfe9f3"/><stop offset="1" stop-color="#f6f3ec"/></linearGradient>
+    <linearGradient id="far" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#b9c3cc"/><stop offset="1" stop-color="#d9dcdc"/></linearGradient>
+    <linearGradient id="mid" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8f9a86"/><stop offset="1" stop-color="#b7b9a3"/></linearGradient>
+    <linearGradient id="near" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6f7a5e"/><stop offset="1" stop-color="#8d8a6c"/></linearGradient>
+    <radialGradient id="jam" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#4a3aa7" stop-opacity="0.32"/><stop offset="1" stop-color="#4a3aa7" stop-opacity="0.02"/></radialGradient>
+    <g id="quad">
+      <line x1="-9" y1="-5" x2="9" y2="5" stroke="#1b1b19" stroke-width="1.6"/>
+      <line x1="-9" y1="5" x2="9" y2="-5" stroke="#1b1b19" stroke-width="1.6"/>
+      <ellipse cx="-9" cy="-5" rx="5.2" ry="1.7" fill="#1b1b19" fill-opacity="0.28"/>
+      <ellipse cx="9" cy="-5" rx="5.2" ry="1.7" fill="#1b1b19" fill-opacity="0.28"/>
+      <ellipse cx="-9" cy="5" rx="5.2" ry="1.7" fill="#1b1b19" fill-opacity="0.28"/>
+      <ellipse cx="9" cy="5" rx="5.2" ry="1.7" fill="#1b1b19" fill-opacity="0.28"/>
+      <rect x="-3.6" y="-2.6" width="7.2" height="5.2" rx="1.4" fill="currentColor"/>
+    </g>
+    <g id="pin"><path d="M0 0 C -6 -8 -6 -15 0 -15 C 6 -15 6 -8 0 0 Z" fill="currentColor" stroke="#1b1b19" stroke-width="0.7"/><circle cx="0" cy="-10.5" r="2.2" fill="#fff"/></g>
+    <marker id="ah" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0,0 L7,3.5 L0,7 Z" fill="#1b1b19"/></marker>
+  </defs>
+  <rect width="1000" height="300" fill="url(#sky)"/>
+  <!-- cloud deck -->
+  <g fill="#ffffff" fill-opacity="0.85">
+    <ellipse cx="610" cy="46" rx="70" ry="13"/><ellipse cx="660" cy="38" rx="44" ry="14"/><ellipse cx="570" cy="40" rx="36" ry="10"/>
+    <ellipse cx="850" cy="58" rx="56" ry="11"/><ellipse cx="885" cy="50" rx="32" ry="11"/>
+  </g>
+  <!-- ranges -->
+  <path d="M0 150 L60 110 L110 132 L170 78 L230 118 L300 70 L360 104 L430 60 L500 98 L560 56 L640 96 L700 64 L780 100 L850 58 L920 96 L1000 72 L1000 300 L0 300 Z" fill="url(#far)"/>
+  <path d="M0 190 L80 150 L140 172 L210 130 L280 170 L350 134 L420 176 L500 140 L580 180 L650 146 L740 184 L820 150 L900 182 L1000 150 L1000 300 L0 300 Z" fill="url(#mid)"/>
+  <!-- snow caps -->
+  <g fill="#ffffff" fill-opacity="0.9"><path d="M170 78 L158 92 L176 88 L184 94 Z"/><path d="M430 60 L418 76 L436 70 L446 78 Z"/><path d="M560 56 L548 72 L566 66 L574 74 Z"/><path d="M850 58 L838 74 L856 68 L866 76 Z"/></g>
+  <!-- valley floor and river -->
+  <path d="M0 300 L0 236 C 120 226 200 238 290 228 C 380 218 420 246 520 238 C 610 230 680 250 780 240 C 860 232 930 246 1000 238 L1000 300 Z" fill="url(#near)"/>
+  <path d="M0 262 C 110 252 190 266 300 256 C 400 246 450 272 560 262 C 660 254 720 276 830 266 C 900 260 950 270 1000 266" fill="none" stroke="#7fb3d6" stroke-width="4" stroke-linecap="round"/>
+  <!-- landslide scar -->
+  <path d="M598 150 L640 142 L684 214 L618 224 Z" fill="#a38b6a" fill-opacity="0.9"/>
+  <path d="M606 170 L660 204 M614 190 L650 212" stroke="#8a7355" stroke-width="1.2"/>
+  <!-- geofence -->
+  <path d="M40 206 C 300 190 600 196 980 188" fill="none" stroke="#f97316" stroke-width="1.4" stroke-dasharray="6 4"/>
+  <path d="M40 292 C 300 296 600 290 980 294" fill="none" stroke="#f97316" stroke-width="1.4" stroke-dasharray="6 4"/>
+  <!-- interference zone -->
+  <circle cx="470" cy="226" r="62" fill="url(#jam)"/>
+  <g stroke="#4a3aa7" stroke-width="1.2" fill="none"><path d="M462 234 q8 -10 16 0"/><path d="M456 238 q14 -18 28 0"/></g>
+  <line x1="470" y1="240" x2="470" y2="252" stroke="#4a3aa7" stroke-width="2"/>
+  <!-- GCS -->
+  <g transform="translate(70 246)">
+    <path d="M-22 0 L0 -18 L22 0 Z" fill="#e8e4d8" stroke="#1b1b19" stroke-width="0.9"/>
+    <line x1="28" y1="0" x2="28" y2="-44" stroke="#1b1b19" stroke-width="1.6"/>
+    <circle cx="28" cy="-46" r="3" fill="#1d4ed8"/>
+    <g fill="none" stroke="#1d4ed8" stroke-width="1"><path d="M36 -54 a 12 12 0 0 1 0 16"/><path d="M41 -58 a 18 18 0 0 1 0 24"/></g>
+    <g fill="#26272a"><rect x="-44" y="4" width="10" height="3" rx="1"/><rect x="-30" y="4" width="10" height="3" rx="1"/><rect x="-16" y="4" width="10" height="3" rx="1"/></g>
+  </g>
+  <!-- chain links -->
+  <g stroke="#2a78d6" stroke-width="1.6" fill="none">
+    <path d="M98 200 L262 128"/><path d="M262 128 L420 150" stroke-dasharray="1 0"/><path d="M420 150 L556 120"/>
+    <path d="M556 120 L690 172"/><path d="M556 120 L760 196"/><path d="M262 128 L330 196"/>
+  </g>
+  <g fill="#2a78d6"><circle cx="180" cy="164" r="2.4"/><circle cx="340" cy="139" r="2.4"/><circle cx="488" cy="135" r="2.4"/><circle cx="624" cy="146" r="2.4"/></g>
+  <!-- relays and scouts -->
+  <g color="#eb6834"><use href="#quad" transform="translate(262 128) scale(1.45)"/><use href="#quad" transform="translate(420 150) scale(1.45)"/><use href="#quad" transform="translate(556 120) scale(1.45)"/></g>
+  <g color="#2a78d6"><use href="#quad" transform="translate(330 196) scale(1.45)"/><use href="#quad" transform="translate(690 172) scale(1.45)"/><use href="#quad" transform="translate(760 196) scale(1.45)"/></g>
+  <!-- returning aircraft -->
+  <g color="#a3a19b"><use href="#quad" transform="translate(150 214) scale(1.45)"/></g>
+  <path d="M176 214 L128 222" stroke="#a3a19b" stroke-width="1" stroke-dasharray="3 3" marker-end="url(#ah)"/>
+  <!-- tasks -->
+  <g color="#dc2626"><use href="#pin" x="690" y="226"/><use href="#pin" x="772" y="238"/></g>
+  <g color="#f59e0b"><use href="#pin" x="336" y="250"/></g>
+  <g color="#0f8a5f"><use href="#pin" x="222" y="248"/><use href="#pin" x="880" y="246"/></g>
+  <!-- labels -->
+  <g font-size="12" fill="#1b1b19">
+    <text x="36" y="288">GCS + charging pads</text>
+    <text x="210" y="106">relay (orange)</text>
+    <text x="570" y="104">relay hop around the bend</text>
+    <text x="700" y="150">scouts on P1 sites (blue)</text>
+    <text x="512" y="284" fill="#4a3aa7">interference zone</text>
+    <text x="612" y="136" fill="#6b5436">landslide</text>
+    <text x="178" y="226" fill="#6b6a64" font-size="10.5">heading home for a battery swap</text>
+    <text x="838" y="276" font-size="10.5">delivered</text>
+    <text x="870" y="186" fill="#c2410c" font-size="10.5">geofence</text>
+    <text x="596" y="30" fill="#6b6a64" font-size="10.5">cloud base, found by flying into it</text>
+  </g>
+</svg>
+</div>
+<figcaption><b>Fig. 1.</b> What C-DAWN is doing, drawn by hand. The GCS sits at the valley mouth, outside the affected area, with its charging pads beside it. Relays (orange) hold a chain that follows the valley round its bend; scouts (blue) survey the reported sites, which are coloured by priority and turn green once their data has reached the GCS. One aircraft is heading back for a battery swap while its station stays covered. The interference zone, the cloud base and the geofence are all things the swarm has to find out about or respect on its own.</figcaption>
+</figure>
+
+<div class="cols">
+
+<h2>1&nbsp;&nbsp;Introduction</h2>
+<p>Mountain valleys are hard places to keep a radio link alive. A 900&nbsp;MHz link with half a watt of power reaches tens of kilometres in open air, but in the Mandakini or Bhagirathi valleys a single spur of rock can take 40&nbsp;dB out of it. Add a battery that lasts a quarter of an hour, a valley wind that makes the flight home twice as slow as the flight out, and the ordinary ways a field deployment goes wrong (an aircraft goes down, a radio dies, somebody's generator starts spraying noise across the band), and the problem the UAV-X brief describes becomes clear. The fleet has to survey every reported site and keep talking to the GCS the whole time, and it has to do this without anyone telling it what has just broken.</p>
+<p>We treat communication as part of the mission, not a side condition. A site only counts as done when its imagery has reached the GCS, so the swarm is scored on exactly what the responders need. Every decision in the stack, from which aircraft to send to where the relays should hover, is made with the link home in mind.</p>
+<p>This report describes what we built and how it performs. Our main contributions are:</p>
+<ol>
+  <li>A <b>terrain-aware relay requirement</b>: the swarm walks a chain from the GCS antenna along the valley and places a hop wherever the previous one runs out of margin, so the number of relays comes from the rock and the radio, not from a constant.</li>
+  <li><b>Dynamic role management</b> in which any aircraft can fly any role, with launches from the pads, failover in about 200 to 300&nbsp;ms, and a <b>make-before-break handover</b> so a relay leaving to recharge never opens a gap.</li>
+  <li><b>Energy- and wind-aware planning</b> that decides when to come home and which tasks are affordable from the aircraft's own measured power draw.</li>
+  <li>A <b>perception-only awareness layer</b>: the autonomy never reads the simulator's truth, and a test audits the source code to keep it that way.</li>
+  <li>A reproducible evaluation with a JSON scenario format, hidden disturbances, a standard log set and a fixed-role baseline for comparison.</li>
+</ol>
+
+<h2>2&nbsp;&nbsp;Problem and System Model</h2>
+<p><b>Area and GCS.</b> The affected area is a valley corridor about 4.2&nbsp;km long inside a 5.1&nbsp;×&nbsp;5.1&nbsp;km terrain tile. The GCS is a fixed ground node at the valley mouth with its antenna on a 10&nbsp;m mast and a row of landing and charging pads. It cannot fail or run flat, it is where every packet is going, and every aircraft starts and ends its sorties on one of its pads.</p>
+<p><b>Fleet.</b> Five or six identical 1.9&nbsp;kg quadrotors with a 900&nbsp;MHz mesh radio (27&nbsp;dBm, 3&nbsp;dBi). Hover endurance is about 18 minutes and cruise about 15. A battery swap takes up to two minutes on the pad. Roles are not fixed: an aircraft can be a scout, a relay, or on standby (flying home, or waiting on the pad).</p>
+<p><b>Tasks.</b> Each survey task <i>p</i> has a position, a priority <i>π<sub>p</sub></i>&nbsp;∈&nbsp;{1,&nbsp;2,&nbsp;3} with weight <i>w<sub>p</sub></i>&nbsp;=&nbsp;3,&nbsp;2,&nbsp;1, and a release time. Tasks released after launch are the "newly emerging" ones; the swarm cannot see them before they are reported. A task is surveyed after a two-second dwell within 30&nbsp;m, and delivered when all 12 chunks of its data have arrived at the GCS.</p>
+<p><b>Constraints.</b> A mission clock (12 or 15 minutes in our scenarios), a polygon geofence with an AGL ceiling, at least 3&nbsp;m between aircraft, and a battery that must never run out in the air. We read "complete the mission safely and within the allotted time" strictly: every aircraft has to be back on a pad by the deadline.</p>
+
+<div class="tblwrap wide">
+<table>
+  <caption><b>Table 1.</b> How each requirement in the UAV-X brief is met, and how we measure it.</caption>
+  <thead><tr><th style="width:17%">The swarm must</th><th style="width:47%">What C-DAWN does</th><th style="width:15%">Where</th><th style="width:21%">Measured as</th></tr></thead>
+  <tbody>
+    <tr><td>Survey all assigned locations</td><td>Assign a task only if the aircraft can reach it, survey it and get home inside its battery and the clock; greedy on priority weight per second of travel.</td><td class="mono">sim/guidance.py<br>sim/energy.py</td><td>completion rate and time, priority-weighted score</td></tr>
+    <tr><td>Maintain end-to-end comms with the GCS</td><td>GCS as a fixed node; relay chain sized from the terrain; GNN placement; SCM-aware routing; packet-level store-and-forward.</td><td class="mono">mesh/roles.py<br>mesh/traffic.py</td><td>PDR, latency, availability, downtime</td></tr>
+    <tr><td>Dynamically assign relays</td><td>Relay count re-planned every second; launch from pads first, otherwise promote the scout doing the least valuable work.</td><td class="mono">mesh/roles.py</td><td>relay reallocations, reconfiguration efficiency</td></tr>
+    <tr><td>Reconfigure on degradation, failure or recharge</td><td>Heartbeat-based failover; interference localised and routed round; make-before-break relay handover; lost-link failsafe.</td><td class="mono">mesh/election.py<br>mesh/awareness.py</td><td>recovery time, performance after failures</td></tr>
+    <tr><td>Prioritise new high-priority regions</td><td>A new P1 task pre-empts the best-placed scout on lower-priority work; standby scouts; discretionary returns turned round.</td><td class="mono">sim/guidance.py</td><td>emergency response time, weighted score</td></tr>
+    <tr><td>Finish safely, on time</td><td>Energy-aware return home; home before the deadline; geofence projection on every setpoint; predictive separation; sequenced take-offs.</td><td class="mono">sim/deconfliction.py<br>sim/world.py</td><td>collisions, minimum separation, flat batteries, geofence breaches</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2>3&nbsp;&nbsp;Architecture</h2>
+<p>Everything runs in one Python process on one simulated clock. The live dashboard, the three-laptop demonstration and the headless benchmark all call the same <code>step()</code>, so the numbers we report come from exactly the code a judge would watch. Fig.&nbsp;2 shows the layers. The part we care most about is the dashed line in the middle. Below it is the simulator, which knows everything. Above it is the autonomy, which only knows what its sensors and its radio tell it.</p>
+
+<figure class="wide">
+<div class="figbox" style="padding:1mm 6mm">
+<svg viewBox="0 0 1000 270" style="max-width:86%" role="img" aria-label="Architecture: the simulator and sensor models below a truth boundary, the awareness layer building beliefs, and the autonomy layers with their update rates above it, feeding setpoints back to the flight controller.">
+  <defs><marker id="a2" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#1b1b19"/></marker></defs>
+  <g font-size="12.5" fill="#1b1b19">
+    <!-- simulator band -->
+    <rect x="10" y="190" width="980" height="70" rx="4" fill="#f3f1ea" stroke="#b9b6ad"/>
+    <text x="22" y="208" font-weight="700" font-size="11.5" letter-spacing="1">SIMULATOR (TRUTH), 50 Hz</text>
+    <g font-size="11.5">
+      <rect x="22" y="216" width="150" height="34" rx="3" fill="#fff" stroke="#8a877e"/><text x="97" y="237" text-anchor="middle">terrain 5 m grid, real DEM</text>
+      <rect x="182" y="216" width="150" height="34" rx="3" fill="#fff" stroke="#8a877e"/><text x="257" y="237" text-anchor="middle">multirotor + wind shear</text>
+      <rect x="342" y="216" width="170" height="34" rx="3" fill="#fff" stroke="#8a877e"/><text x="427" y="237" text-anchor="middle">RF: Friis + knife-edge + fading</text>
+      <rect x="522" y="216" width="150" height="34" rx="3" fill="#fff" stroke="#8a877e"/><text x="597" y="237" text-anchor="middle">battery, faults, weather</text>
+      <rect x="682" y="216" width="140" height="34" rx="3" fill="#fff" stroke="#8a877e"/><text x="752" y="237" text-anchor="middle">scenario director</text>
+      <rect x="832" y="216" width="146" height="34" rx="3" fill="#fff" stroke="#4a3aa7"/><text x="905" y="231" text-anchor="middle" fill="#4a3aa7">sensor models</text><text x="905" y="244" text-anchor="middle" font-size="10" fill="#4a3aa7">links, noise, DF, cloud, ranging</text>
+    </g>
+    <!-- boundary -->
+    <line x1="10" y1="176" x2="990" y2="176" stroke="#4a3aa7" stroke-width="1.6" stroke-dasharray="7 5"/>
+    <text x="250" y="170" font-size="11" fill="#4a3aa7" font-weight="700">TRUTH BOUNDARY: only measurements cross it</text>
+    <!-- awareness -->
+    <rect x="640" y="118" width="350" height="46" rx="4" fill="#fff" stroke="#4a3aa7" stroke-width="1.4"/>
+    <text x="815" y="137" text-anchor="middle" font-weight="700">swarm awareness, 10 Hz</text>
+    <text x="815" y="155" text-anchor="middle" font-size="11">heartbeats · acks · noise · path-loss offset · wind · cloud · GNSS check</text>
+    <path d="M905 216 L905 166" stroke="#4a3aa7" stroke-width="1.4" marker-end="url(#a2)"/>
+    <text x="912" y="198" font-size="10.5" fill="#4a3aa7">readings</text>
+    <!-- autonomy layers -->
+    <text x="22" y="22" font-weight="700" font-size="11.5" letter-spacing="1">AUTONOMY (BELIEF)</text>
+    <g font-size="11.5">
+      <rect x="22" y="32" width="190" height="40" rx="3" fill="#fff" stroke="#1b1b19"/><text x="117" y="49" text-anchor="middle" font-weight="700">role manager</text><text x="117" y="64" text-anchor="middle" font-size="10.5">1 Hz · how many relays, who</text>
+      <rect x="222" y="32" width="190" height="40" rx="3" fill="#fff" stroke="#1b1b19"/><text x="317" y="49" text-anchor="middle" font-weight="700">relay placement (GNN)</text><text x="317" y="64" text-anchor="middle" font-size="10.5">2 Hz · where they hover</text>
+      <rect x="422" y="32" width="190" height="40" rx="3" fill="#fff" stroke="#1b1b19"/><text x="517" y="49" text-anchor="middle" font-weight="700">routing + traffic</text><text x="517" y="64" text-anchor="middle" font-size="10.5">2 Hz / 10 Hz · which path</text>
+      <rect x="622" y="32" width="170" height="40" rx="3" fill="#fff" stroke="#1b1b19"/><text x="707" y="49" text-anchor="middle" font-weight="700">failover + causal</text><text x="707" y="64" text-anchor="middle" font-size="10.5">10 Hz · why a link fails</text>
+      <rect x="802" y="32" width="188" height="40" rx="3" fill="#fff" stroke="#1b1b19"/><text x="896" y="49" text-anchor="middle" font-weight="700">interference response</text><text x="896" y="64" text-anchor="middle" font-size="10.5">5 Hz · localise, withdraw</text>
+      <rect x="22" y="92" width="400" height="40" rx="3" fill="#e8f0fb" stroke="#2a78d6"/><text x="222" y="109" text-anchor="middle" font-weight="700">guidance, 50 Hz</text><text x="222" y="124" text-anchor="middle" font-size="10.5">tasking · pre-emption · routes · RTH · landing · geofence · lost-link</text>
+      <rect x="432" y="92" width="190" height="40" rx="3" fill="#e8f0fb" stroke="#2a78d6"/><text x="527" y="109" text-anchor="middle" font-weight="700">separation assurance</text><text x="527" y="124" text-anchor="middle" font-size="10.5">50 Hz · closest-approach push</text>
+    </g>
+    <path d="M640 150 L412 150 L412 136" stroke="#4a3aa7" stroke-width="1.2" fill="none" marker-end="url(#a2)"/><text x="560" y="146" font-size="10.5" fill="#4a3aa7">beliefs</text>
+    <path d="M760 118 L760 76" stroke="#4a3aa7" stroke-width="1.2" marker-end="url(#a2)"/>
+    <text x="766" y="100" font-size="10.5" fill="#4a3aa7">beliefs</text>
+    <path d="M117 72 L117 90" stroke="#1b1b19" stroke-width="1.1" marker-end="url(#a2)"/><text x="123" y="85" font-size="10">roles, stations</text>
+    <path d="M222 132 L222 214" stroke="#2a78d6" stroke-width="1.4" marker-end="url(#a2)"/>
+    <text x="229" y="160" font-size="10.5" fill="#2a78d6">setpoints to the flight controller (PID)</text>
+  </g>
+</svg>
+</div>
+<figcaption><b>Fig. 2.</b> Layers, rates and the truth boundary. The simulator (bottom) owns terrain, physics, the radio channel, faults and the scenario's hidden disturbances. Only sensor readings cross the purple line. The awareness layer turns them into beliefs, and every autonomy layer above decides from those beliefs. Setpoints are the only thing that goes back down. Rates are per simulated second; physics runs at 50&nbsp;Hz.</figcaption>
+</figure>
+
+<h2>4&nbsp;&nbsp;Simulation Environment</h2>
+<p><b>Terrain.</b> Each site is a 5.1&nbsp;km terrain pack with a 5&nbsp;m elevation grid built from AWS Open Data terrain tiles (SRTM and Copernicus derived) and Sentinel-2 cloudless imagery [9, 10]. We ship four real disaster sites, Kedarnath (2013 debris flow), Uttarkashi (the 1991 earthquake area), Joshimath and Chungthang, plus a procedural valley for repeatable tests. The mission corridor is found by dynamic programming along the valley floor.</p>
+<p><b>Flight.</b> An underactuated multirotor model with attitude lag, slew limits and airspeed drag, flown by a cascaded PID. Wind follows a power-law shear on height above ground (exponent 0.16) with Dryden turbulence and gusts [8].</p>
+<p><b>Radio.</b> Every tick, every pair of aircraft and every aircraft-to-GCS link gets a link budget:</p>
+<div class="eq"><span class="body">P<sub>r</sub> = P<sub>t</sub> + G<sub>t</sub> + G<sub>r</sub> − L<sub>fs</sub>(d) − J(v) − L<sub>x</sub>, &nbsp;&nbsp; SNR = P<sub>r</sub> − N</span><span class="no">(1)</span></div>
+<p>where <i>L</i><sub>fs</sub> is Friis free-space loss [2], <i>L</i><sub>x</sub> is extra loss (wet antennas in rain) and <i>J</i>(<i>v</i>) is the ITU-R P.526 single knife-edge diffraction loss over the worst ridge on the path [1]. Here <i>h</i> is how far the ridge pokes above the straight radio path, and <i>d</i><sub>1</sub>, <i>d</i><sub>2</sub> are its distances to the two ends:</p>
+<div class="eq"><span class="body"><div>J(v) = 6.9 + 20 log<sub>10</sub>( √((v − 0.1)<sup>2</sup> + 1) + v − 0.1 )</div><div>v = h √( 2(d<sub>1</sub>+d<sub>2</sub>) / (λ d<sub>1</sub> d<sub>2</sub>) )</div></span><span class="no">(2)</span></div>
+<p>Packet delivery ratio is averaged over a burst of 24 packets, each with its own Rician fade (<i>K</i>&nbsp;=&nbsp;6&nbsp;dB). We learnt early that a single fading draw per tick makes a perfectly steady link look like it is flapping, which confused both routing and the causal engine.</p>
+
+<h2>5&nbsp;&nbsp;Mission Autonomy</h2>
+
+<p>Before the individual pieces, it helps to see one aircraft's life (Fig.&nbsp;3). It starts charged on a pad, launches as a scout or a relay, may swap roles in the air, and eventually comes home for one of five reasons. It lands, has its battery swapped, and waits until the role manager needs it again. Everything below decides when one of these arrows is taken.</p>
+
+<figure>
+<div class="figbox">
+<svg viewBox="0 0 460 272" role="img" aria-label="State machine of one UAV: ready on pad, launch as scout or relay, roles can swap in flight, return home, land, charge, ready again; failure is detected by silence.">
+  <defs><marker id="a5" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#1b1b19"/></marker></defs>
+  <g font-size="12" fill="#1b1b19" text-anchor="middle">
+    <rect x="8" y="104" width="92" height="40" rx="20" fill="#dcdad4" stroke="#1b1b19"/><text x="54" y="121" font-weight="700">READY</text><text x="54" y="136" font-size="10.5">charged, on pad</text>
+    <rect x="160" y="12" width="110" height="40" rx="6" fill="#e8f0fb" stroke="#2a78d6"/><text x="215" y="29" font-weight="700">SCOUT</text><text x="215" y="44" font-size="10.5">surveys, carries data</text>
+    <rect x="160" y="196" width="110" height="40" rx="6" fill="#fde7dc" stroke="#eb6834"/><text x="215" y="213" font-weight="700">RELAY</text><text x="215" y="228" font-size="10.5">holds a chain station</text>
+    <rect x="338" y="104" width="114" height="40" rx="6" fill="#f3f1ea" stroke="#1b1b19"/><text x="395" y="121" font-weight="700">RETURNING</text><text x="395" y="136" font-size="10.5">flying home</text>
+    <rect x="338" y="196" width="114" height="40" rx="20" fill="#f3f1ea" stroke="#1b1b19"/><text x="395" y="213" font-weight="700">CHARGING</text><text x="395" y="228" font-size="10.5">battery swap, 2 min</text>
+    <path d="M60 104 L158 38" stroke="#1b1b19" fill="none" marker-end="url(#a5)"/><text x="92" y="62" font-size="10.5">launch</text>
+    <path d="M60 144 L158 210" stroke="#1b1b19" fill="none" marker-end="url(#a5)"/><text x="92" y="190" font-size="10.5">launch</text>
+    <path d="M270 36 L378 102" stroke="#1b1b19" fill="none" marker-end="url(#a5)"/>
+    <path d="M270 212 L360 146" stroke="#1b1b19" fill="none" marker-end="url(#a5)"/>
+    <text x="308" y="94" font-size="10" fill="#4d4c47">go home</text>
+    <path d="M410 144 L410 194" stroke="#1b1b19" fill="none" marker-end="url(#a5)"/><text x="432" y="174" font-size="10.5">lands</text>
+    <path d="M395 236 L395 258 L54 258 L54 146" stroke="#1b1b19" fill="none" marker-end="url(#a5)"/><text x="226" y="254" font-size="10.5">battery full: back to READY</text>
+    <path d="M232 54 L232 194" stroke="#4a3aa7" stroke-dasharray="4 3" fill="none" marker-end="url(#a5)"/>
+    <path d="M198 194 L198 54" stroke="#4a3aa7" stroke-dasharray="4 3" fill="none" marker-end="url(#a5)"/>
+    <text x="252" y="116" font-size="10" fill="#4a3aa7" text-anchor="start">promote</text><text x="178" y="136" font-size="10" fill="#4a3aa7" text-anchor="end">demote</text>
+    <path d="M386 102 C 372 62 324 42 274 28" stroke="#2a78d6" stroke-dasharray="2 3" fill="none" marker-end="url(#a5)"/>
+    <text x="360" y="44" font-size="10" fill="#2a78d6">divert to a new task</text>
+    <text x="54" y="22" font-size="10" fill="#4a3aa7">silent for 200 ms:</text><text x="54" y="34" font-size="10" fill="#4a3aa7">treated as failed</text>
+  </g>
+</svg>
+</div>
+<figcaption><b>Fig. 3.</b> The life of one aircraft. Solid arrows are autonomous transitions; dashed purple arrows are role changes in flight (each one a logged reallocation). An aircraft goes home for one of five reasons: its energy threshold, the mission clock, a lost link, no work left, or a completed handover. A failure is not a state the swarm is told about. An aircraft nobody has heard for 200&nbsp;ms is simply treated as gone.</figcaption>
+</figure>
+
+<h3>5.1&nbsp;&nbsp;Energy and time, before anything else</h3>
+<p>Every decision that sends an aircraft away from the GCS has to be affordable, so the energy model answers three questions: how much battery it takes to get home from here, whether a task can be done and still leave enough to get home, and when a relay has to call for its replacement. Drain follows the airframe's own law, scaled by a factor <i>k&#770;</i> that each aircraft measures from its battery current:</p>
+<div class="eq"><span class="body">ḃ = k&#770; [ b<sub>0</sub> + (b<sub>1</sub> − b<sub>0</sub>) f<sub>T</sub> ], &nbsp;&nbsp; v<sub>g</sub> = clip( v<sub>a</sub> + <b>w&#770;</b>·<b>û</b>, 5, 19 )</span><span class="no">(3)</span></div>
+<p>with <i>f</i><sub>T</sub> the thrust fraction, <b>w&#770;</b> the estimated wind at cruise height and <b>û</b> the direction of travel. Leg time is <i>T</i>(<i>a</i>,<i>b</i>)&nbsp;=&nbsp;1.15|<i>ab</i>|/<i>v</i><sub>g</sub>&nbsp;+&nbsp;25&nbsp;s. The return-home and handover thresholds then follow directly, with a safety factor <i>s</i>&nbsp;=&nbsp;1.2 and an 8% landing reserve:</p>
+<div class="eq"><span class="body">B<sub>rth</sub> = max( 12, &nbsp;s ḃ T(<b>p</b>, <b>h</b>) + 8 )</span><span class="no">(4)</span></div>
+<div class="eq"><span class="body">B<sub>ho</sub> = B<sub>rth</sub> + s ḃ<sub>hov</sub> ( T(<b>g</b>, <b>q</b>) + 25 s )</span><span class="no">(5)</span></div>
+<p>Here <b>p</b> is where the aircraft is, <b>h</b> its home pad, <b>g</b> the GCS and <b>q</b> a relay's station. The point of Eqs.&nbsp;(4) and (5) is that there is no fixed "come home at 22%" rule. A relay four kilometres up the valley with the wind in its face turns for home at about 62%, one next to the GCS at 12%. Fig.&nbsp;4 shows the curves.</p>
+
+<figure>
+<img src="figs/fig_energy.svg" alt="Return-home and handover thresholds rising with distance from the pad, higher with a headwind.">
+<figcaption><b>Fig. 4.</b> Thresholds from Eqs.&nbsp;(4) and (5) for a cruising aircraft. A headwind on the way home adds 16 points of battery at 4&nbsp;km. Dashed lines are the relay handover thresholds, which leave time for a replacement to fly out.</figcaption>
+</figure>
+
+<h3>5.2&nbsp;&nbsp;Who surveys what, and when to change our mind</h3>
+<p>Allocation is greedy on value rate. At each step we take the (scout, task) pair with the largest</p>
+<div class="eq"><span class="body"><div>w<sub>p</sub> / ( ETA<sub>s,p</sub> + 60 s )</div><div class="up" style="font-size:7.8pt">subject to: task affordable, and round trip ≤ time left</div></span><span class="no">(6)</span></div>
+<p>The 60&nbsp;s term stops a very close P3 task from always beating a P1 task a little further away. When a P1 task arrives and no idle scout can take it, the best-placed scout on lower-priority work is pre-empted, unless it is already hovering over its target. Idle scouts with a healthy battery loiter at a standby point mid-valley, inside relay cover, so the next emergency is minutes closer. A scout that is flying home only because it had nothing to do can be turned round. Fig.&nbsp;5 is the whole loop.</p>
+
+<figure>
+<div class="figbox">
+<svg viewBox="0 0 460 330" role="img" aria-label="Flowchart of task allocation with affordability check, pre-emption and standby.">
+  <defs><marker id="a3" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#1b1b19"/></marker></defs>
+  <g font-size="12" fill="#1b1b19" text-anchor="middle">
+    <rect x="130" y="6" width="200" height="30" rx="15" fill="#f3f1ea" stroke="#1b1b19"/><text x="230" y="25">open, reported tasks</text>
+    <path d="M230 36 L230 54" stroke="#1b1b19" marker-end="url(#a3)"/>
+    <polygon points="230,56 330,86 230,116 130,86" fill="#fff" stroke="#1b1b19"/><text x="230" y="83">idle scout can</text><text x="230" y="97">afford it and finish?</text>
+    <path d="M330 86 L378 86 L378 124" stroke="#1b1b19" marker-end="url(#a3)"/><text x="354" y="80" font-size="11">yes</text>
+    <rect x="316" y="126" width="136" height="44" rx="3" fill="#e8f0fb" stroke="#2a78d6"/><text x="384" y="144">assign best</text><text x="384" y="160">w / (ETA + 60)</text>
+    <path d="M230 116 L230 134" stroke="#1b1b19" marker-end="url(#a3)"/><text x="240" y="129" font-size="11" text-anchor="start">no</text>
+    <polygon points="230,136 320,164 230,192 140,164" fill="#fff" stroke="#1b1b19"/><text x="230" y="161">P1 task, and a</text><text x="230" y="175">busy lower-priority scout?</text>
+    <path d="M320 164 L346 164 L346 206" stroke="#1b1b19" marker-end="url(#a3)"/><text x="330" y="158" font-size="11">yes</text>
+    <rect x="286" y="208" width="166" height="44" rx="3" fill="#fde7dc" stroke="#eb6834"/><text x="369" y="226">pre-empt it (not if</text><text x="369" y="242">already over its target)</text>
+    <path d="M230 192 L230 210" stroke="#1b1b19" marker-end="url(#a3)"/><text x="240" y="205" font-size="11" text-anchor="start">no</text>
+    <polygon points="230,212 316,240 230,268 144,240" fill="#fff" stroke="#1b1b19"/><text x="230" y="237">full battery</text><text x="230" y="251">would afford it?</text>
+    <path d="M144 240 L62 240 L62 278" stroke="#1b1b19" marker-end="url(#a3)"/><text x="100" y="234" font-size="11">no</text>
+    <rect x="6" y="280" width="116" height="44" rx="3" fill="#f3f1ea" stroke="#1b1b19"/><text x="64" y="298">out of reach:</text><text x="64" y="314">not planned for</text>
+    <path d="M230 268 L230 280" stroke="#1b1b19" marker-end="url(#a3)"/><text x="240" y="278" font-size="11" text-anchor="start">yes</text>
+    <rect x="150" y="282" width="162" height="44" rx="3" fill="#f3f1ea" stroke="#1b1b19"/><text x="231" y="300">launch a charged one,</text><text x="231" y="316">or send one to recharge</text>
+    <text x="80" y="118" font-size="11" fill="#4d4c47">idle and healthy?</text><text x="80" y="132" font-size="11" fill="#4d4c47">stand by mid-valley</text>
+  </g>
+</svg>
+</div>
+<figcaption><b>Fig. 5.</b> The allocation loop, run every tick. Affordability means battery for the task plus the trip home plus the landing reserve; finishing means the whole round trip fits before the deadline.</figcaption>
+</figure>
+
+<h3>5.3&nbsp;&nbsp;How many relays the terrain asks for</h3>
+<p>This is the piece we are proudest of, because it replaces a guess with a measurement of the mountain. Once a second the role manager collects the points where work is happening: scouts on task, open reachable tasks, aircraft carrying undelivered data, and aircraft still flying home. For the farthest of them it walks the chain in Algorithm&nbsp;1.</p>
+<div class="algo">
+  <div class="t">Algorithm 1: Terrain-aware relay chain</div>
+  <ol>
+    <li>Sample the valley centreline every 60&nbsp;m from the GCS to the target, at relay height (160&nbsp;m AGL).</li>
+    <li><span class="kw">while</span> the current hop cannot reach the target with SNR ≥ 15&nbsp;dB:</li>
+    <li>&nbsp;&nbsp;&nbsp;pick the <i>farthest</i> sample the current hop still reaches with SNR ≥ 15&nbsp;dB, using Eq.&nbsp;(1) over the terrain map, the measured noise floor and any interference source the swarm has <i>localised</i>;</li>
+    <li>&nbsp;&nbsp;&nbsp;make it a hop; <span class="kw">if</span> no sample is reachable, stop.</li>
+    <li><span class="kw">return</span> the hop count (the relay requirement) and the hop points (anchors for the GNN).</li>
+  </ol>
+</div>
+<p>The 15&nbsp;dB target is roughly the 9&nbsp;dB a 256-byte frame needs for 95% delivery, plus fading margin. On the Kedarnath scenario the walk gives exactly one relay (Fig.&nbsp;6). The valley turns south past the 2&nbsp;km mark and a spur blocks the straight line from the GCS to the far sites.</p>
+
+<figure>
+<img src="figs/fig_chain.svg" alt="Plan view of Kedarnath terrain with the GCS, one relay hop at the bend and the farthest task.">
+<figcaption><b>Fig. 6.</b> Algorithm&nbsp;1 on the real Kedarnath terrain. Blue lines are the planned links; the white dotted line is the direct path, which clips the spur. Dots are survey tasks by priority (red P1, amber P2, yellow P3); the orange dashed line is the geofence.</figcaption>
+</figure>
+
+<p>The requirement then drives assignment. When there are fewer relays than needed, a charged aircraft on a pad is launched first, because it arrives with a full battery. Failing that, the scout doing the least valuable work that is closest to the missing hop is promoted, and at least one scout always keeps surveying. When there are more relays than needed for 25&nbsp;s, the spare goes back to surveying, or home if there is nothing to survey. Every change is logged as a reallocation with its reason; one that is undone within 30&nbsp;s counts as a flap against reconfiguration efficiency.</p>
+
+<h3>5.4&nbsp;&nbsp;Where the relays hover</h3>
+<p>The role manager decides how many relays and who flies them; the placement network decides where. An E(3)-equivariant graph network [3] proposes stations in one forward pass, then 20 Adam steps on a differentiable version of Eq.&nbsp;(1), with terrain sampled by <code>grid_sample</code>, polish them. The hop points from Algorithm&nbsp;1 are the starting anchors. On 48 held-out layouts over six unseen terrains, connectivity went from 0.48 (naive) to 0.58 with the network alone and 0.66 after refinement, in about 1.4&nbsp;ms plus 21&nbsp;ms. We should be honest that the refinement does most of the work. The network's real job is giving it a good place to start.</p>
+
+<h3>5.5&nbsp;&nbsp;Handing over a relay station</h3>
+<p>Batteries are the reason relays leave, and a naive swarm pulls the relay home and then notices the hole. We do it the other way round (Fig.&nbsp;7). When a relay's battery reaches <i>B</i><sub>ho</sub> from Eq.&nbsp;(5), the role manager launches a charged aircraft from the pads, or promotes a scout, and sends it to the relay's exact station. The outgoing relay is taken out of the placement plan and holds where it is. It leaves only once the replacement is holding station. If something goes wrong and its own return threshold arrives first, it comes home anyway. Safety beats coverage.</p>
+
+<figure>
+<div class="figbox">
+<svg viewBox="0 0 460 200" role="img" aria-label="Timeline of a make-before-break relay handover: the old relay holds until the replacement is on station, so coverage never drops.">
+  <defs><marker id="a4" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#1b1b19"/></marker></defs>
+  <g font-size="12" fill="#1b1b19">
+    <line x1="70" y1="178" x2="450" y2="178" stroke="#1b1b19" marker-end="url(#a4)"/><text x="444" y="195" font-size="11" text-anchor="end">time</text>
+    <text x="8" y="44">relay A</text>
+    <rect x="70" y="30" width="230" height="20" fill="#eb6834"/>
+    <rect x="300" y="30" width="120" height="20" fill="#a3a19b"/>
+    <text x="360" y="44" text-anchor="middle" font-size="11" fill="#fff">flies home</text>
+    <text x="8" y="84">relay B</text>
+    <rect x="70" y="70" width="80" height="20" fill="#dcdad4"/><text x="110" y="84" text-anchor="middle" font-size="11">on pad</text>
+    <rect x="150" y="70" width="150" height="20" fill="#f4b69a"/><text x="225" y="84" text-anchor="middle" font-size="11">launch, fly out</text>
+    <rect x="300" y="70" width="140" height="20" fill="#eb6834"/><text x="370" y="84" text-anchor="middle" font-size="11" fill="#fff">holds station</text>
+    <text x="8" y="124">coverage</text>
+    <rect x="70" y="110" width="370" height="20" fill="#2a78d6"/><text x="255" y="124" text-anchor="middle" font-size="11" fill="#fff">station covered the whole time</text>
+    <line x1="150" y1="22" x2="150" y2="170" stroke="#1b1b19" stroke-dasharray="3 3"/>
+    <line x1="300" y1="22" x2="300" y2="170" stroke="#1b1b19" stroke-dasharray="3 3"/>
+    <text x="155" y="152" font-size="11">A hits its handover</text>
+    <text x="155" y="166" font-size="11">threshold: B called up</text>
+    <text x="305" y="152" font-size="11">B on station:</text>
+    <text x="305" y="166" font-size="11">A released</text>
+  </g>
+</svg>
+</div>
+<figcaption><b>Fig. 7.</b> Make-before-break. The overlap between the two dashed lines is the price of never opening a gap; Eq.&nbsp;(5) sizes it so that A can afford to wait and still get home.</figcaption>
+</figure>
+
+<h3>5.6&nbsp;&nbsp;Failover, routing and data that has to wait</h3>
+<p><b>Failover.</b> Each aircraft's radio is "heard" when anyone, another aircraft or the GCS, measures a usable link to it. A relay nobody has heard for 200&nbsp;ms is treated as failed and the best-scoring scout (battery times mean link quality) is promoted into its slot. The router recomputes at once. Detection dominates the latency, as Fig.&nbsp;8 shows: in our logged runs the whole thing, from the relay going silent to traffic flowing on the new route, took 200 to 300&nbsp;ms. Nothing that still works is ever demoted. The old election re-ranked the whole swarm on every failure, and we saw a healthy relay get pushed out of its role because of it.</p>
+
+<figure>
+<div class="figbox">
+<svg viewBox="0 0 460 190" role="img" aria-label="Failover sequence: the relay goes silent, the heartbeat is missed for 200 ms, the election promotes a scout in under a millisecond, the router recomputes, and traffic resumes.">
+  <defs><marker id="a6" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#1b1b19"/></marker></defs>
+  <g font-size="11.5" fill="#1b1b19">
+    <g font-size="11" fill="#4d4c47"><text x="6" y="30">relay R</text><text x="6" y="62">neighbours, GCS</text><text x="6" y="94">awareness</text><text x="6" y="126">election</text><text x="6" y="158">router, traffic</text></g>
+    <g stroke="#dedbd2"><line x1="104" y1="26" x2="452" y2="26"/><line x1="104" y1="58" x2="452" y2="58"/><line x1="104" y1="90" x2="452" y2="90"/><line x1="104" y1="122" x2="452" y2="122"/><line x1="104" y1="154" x2="452" y2="154"/></g>
+    <rect x="104" y="18" width="40" height="16" fill="#eb6834"/><text x="148" y="30" font-size="11" fill="#4a3aa7" font-weight="700">✕ goes silent</text>
+    <rect x="104" y="50" width="40" height="16" fill="#2a78d6" opacity="0.8"/>
+    <g fill="#a3a19b"><rect x="150" y="54" width="8" height="8"/><rect x="176" y="54" width="8" height="8"/><rect x="202" y="54" width="8" height="8"/><rect x="228" y="54" width="8" height="8"/></g>
+    <text x="244" y="62" font-size="10.5" fill="#4d4c47">no link measured to R</text>
+    <line x1="144" y1="98" x2="258" y2="98" stroke="#4a3aa7" stroke-width="2"/>
+    <text x="150" y="112" font-size="10.5" fill="#4a3aa7">heartbeat window</text>
+    <path d="M258 90 L258 118" stroke="#1b1b19" marker-end="url(#a6)"/>
+    <rect x="258" y="114" width="54" height="16" fill="#f4b69a"/><text x="318" y="126" font-size="10.5">promote best scout, &lt;1 ms</text>
+    <path d="M312 122 L330 150" stroke="#1b1b19" marker-end="url(#a6)"/>
+    <rect x="330" y="146" width="122" height="16" fill="#2a78d6"/><text x="391" y="158" text-anchor="middle" font-size="10.5" fill="#fff">new route, packets flow</text>
+    <line x1="104" y1="176" x2="452" y2="176" stroke="#1b1b19" marker-end="url(#a6)"/>
+    <line x1="144" y1="172" x2="144" y2="180" stroke="#1b1b19"/><text x="144" y="188" text-anchor="middle" font-size="10">0</text>
+    <line x1="258" y1="172" x2="258" y2="180" stroke="#1b1b19"/><text x="258" y="188" text-anchor="middle" font-size="10">200 ms</text>
+    <line x1="330" y1="172" x2="330" y2="180" stroke="#1b1b19"/><text x="330" y="188" text-anchor="middle" font-size="10">≈ 300 ms</text>
+  </g>
+</svg>
+</div>
+<figcaption><b>Fig. 8.</b> Failover, as it happens. Nobody announces that relay R has failed. The swarm notices that nobody can hear it, and after 200&nbsp;ms the election fills the slot and the router moves traffic. The election itself takes microseconds; the waiting is what costs time.</figcaption>
+</figure>
+<p><b>Routing.</b> Dijkstra on −log(PDR), blended with a stability estimate from the causal layer, with the GCS as a node in the graph [4].</p>
+<p><b>Traffic.</b> Packets actually move. Every airborne aircraft sends telemetry at 2&nbsp;Hz (dropped once stale, after 2&nbsp;s), and each surveyed site produces 12 chunks of imagery and situational data. Each hop is tried up to four times, and every try costs airtime, so a bad link shows up as latency before it shows up as loss. Survey chunks are delay-tolerant [7]: with no route they wait in custody on whichever aircraft holds them, and an aircraft that lands hands its backlog to the GCS over the wire. Every delivered packet is acknowledged, and those acknowledgements are the only way an aircraft knows it still has a link home. Sixty seconds without one triggers the lost-link return. Fig.&nbsp;9 shows the three ways survey data can travel.</p>
+
+<figure>
+<div class="figbox">
+<svg viewBox="0 0 460 196" role="img" aria-label="Three data paths: live multi-hop delivery with acknowledgements, custody on the scout when there is no route, and wired offload when the scout lands.">
+  <defs><marker id="a7" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#1b1b19"/></marker></defs>
+  <g font-size="11.5" fill="#1b1b19">
+    <g font-size="10.5" font-weight="700" fill="#4d4c47"><text x="6" y="36">a) route up</text><text x="6" y="100">b) no route</text><text x="6" y="164">c) lands</text></g>
+    <!-- a -->
+    <circle cx="120" cy="32" r="14" fill="#e8f0fb" stroke="#2a78d6"/><text x="120" y="36" text-anchor="middle" font-size="10.5">scout</text>
+    <circle cx="260" cy="32" r="14" fill="#fde7dc" stroke="#eb6834"/><text x="260" y="36" text-anchor="middle" font-size="10.5">relay</text>
+    <rect x="378" y="18" width="50" height="28" rx="3" fill="#f3f1ea" stroke="#1b1b19"/><text x="403" y="36" text-anchor="middle" font-size="10.5">GCS</text>
+    <path d="M134 28 L244 28" stroke="#2a78d6" stroke-width="1.5" marker-end="url(#a7)"/><path d="M274 28 L376 28" stroke="#2a78d6" stroke-width="1.5" marker-end="url(#a7)"/>
+    <g fill="#2a78d6"><rect x="170" y="22" width="7" height="7"/><rect x="306" y="22" width="7" height="7"/></g>
+    <path d="M378 42 C 300 60 200 60 130 44" stroke="#4d4c47" stroke-dasharray="3 3" fill="none" marker-end="url(#a7)"/>
+    <text x="254" y="72" text-anchor="middle" font-size="10" fill="#4d4c47">ack: "you still have a link home"</text>
+    <!-- b -->
+    <circle cx="120" cy="96" r="14" fill="#e8f0fb" stroke="#2a78d6"/><text x="120" y="100" text-anchor="middle" font-size="10.5">scout</text>
+    <g fill="#2a78d6"><rect x="140" y="80" width="7" height="7"/><rect x="140" y="89" width="7" height="7"/><rect x="140" y="98" width="7" height="7"/><rect x="149" y="89" width="7" height="7"/></g>
+    <text x="162" y="94" font-size="10">chunks wait in custody</text>
+    <path d="M280 96 L376 96" stroke="#a3a19b" stroke-dasharray="4 3"/><text x="328" y="90" text-anchor="middle" font-size="16" fill="#4a3aa7">✕</text>
+    <rect x="378" y="82" width="50" height="28" rx="3" fill="#f3f1ea" stroke="#1b1b19"/><text x="403" y="100" text-anchor="middle" font-size="10.5">GCS</text>
+    <text x="162" y="112" font-size="10" fill="#4d4c47">forwarded the moment a route appears</text>
+    <!-- c -->
+    <circle cx="120" cy="160" r="14" fill="#e8f0fb" stroke="#2a78d6"/><text x="120" y="164" text-anchor="middle" font-size="10.5">scout</text>
+    <path d="M134 160 L376 160" stroke="#1b1b19" stroke-width="2.4"/>
+    <text x="255" y="154" text-anchor="middle" font-size="10">lands on its pad: backlog offloaded over the wire</text>
+    <rect x="378" y="146" width="50" height="28" rx="3" fill="#f3f1ea" stroke="#1b1b19"/><text x="403" y="164" text-anchor="middle" font-size="10.5">GCS</text>
+    <text x="255" y="184" text-anchor="middle" font-size="10" fill="#4a3aa7">if it crashes instead, the GCS writes the data off after 20 s of silence</text>
+  </g>
+</svg>
+</div>
+<figcaption><b>Fig. 9.</b> How survey data gets home. Telemetry uses path (a) only and is dropped after 2&nbsp;s. Survey chunks use whichever of (a), (b) or (c) is available, and a task counts as delivered only when all twelve of its chunks have arrived.</figcaption>
+</figure>
+
+<h3>5.7&nbsp;&nbsp;Safety</h3>
+<p>Every setpoint is projected at least 40&nbsp;m inside the geofence polygon and under the AGL ceiling before the controller sees it. Separation assurance predicts each pair's closest point of approach over the next four seconds. If the predicted miss is under 30&nbsp;m (8&nbsp;m near the pads), it pushes the pair apart in proportion to the intrusion and splits them vertically, then re-applies the fence and the terrain floor. Take-offs from the pads are spaced four seconds apart. Across all 24 benchmark runs there were no collisions, no geofence violations, no terrain strikes and no aircraft that ran flat.</p>
+
+<h2>6&nbsp;&nbsp;Knowing Without Being Told</h2>
+<p>A simulator makes cheating easy. The first version of this code, like a lot of swarm demos, read the injected fault directly: "if this drone is marked dead, re-elect". That makes a fault look handled when a real swarm would still be finding out about it. We went back and removed every such path. A disturbance now changes the physics or the radio and nothing else. No flag is set and no callback fires. Table&nbsp;2 lists what the swarm actually sees.</p>
+
+<div class="tblwrap">
+<table>
+  <caption><b>Table 2.</b> How each hidden disturbance is noticed.</caption>
+  <thead><tr><th style="width:24%">Disturbance</th><th style="width:40%">Evidence the swarm has</th><th>What it concludes</th></tr></thead>
+  <tbody>
+    <tr><td>UAV failure</td><td>No one hears it for 200&nbsp;ms</td><td>Failover; task released after 5&nbsp;s; its data written off after 20&nbsp;s</td></tr>
+    <tr><td>Radio outage</td><td>Same silence; its own packets go unacknowledged</td><td>Treated as a failure; the aircraft comes home after 60&nbsp;s and rejoins when heard</td></tr>
+    <tr><td>Interference zone</td><td>Receiver noise readings; direction-finding bearings</td><td>Source cross-fixed; the <i>estimate</i> enters relay planning</td></tr>
+    <tr><td>Area-wide RF drop, packet loss, link cut</td><td>Noise floor rises everywhere; link measurements fall</td><td>Chain re-sized; routes and relays re-planned</td></tr>
+    <tr><td>Battery or motor fault</td><td>Current draw above what the thrust should need</td><td>Drain factor <i>k&#770;</i> rises; earlier return, fewer tasks accepted</td></tr>
+    <tr><td>Heavy rain</td><td>RSSI below the map's prediction; camera loses the ground</td><td>Extra path loss planned for; ceiling set by flying into cloud</td></tr>
+    <tr><td>GNSS drift</td><td>Radio ranging to other aircraft and to the GCS disagrees with GNSS</td><td>Terrain-relative navigation after 2&nbsp;s</td></tr>
+    <tr><td>New emergency</td><td>The report reaches the GCS</td><td>Tasking, pre-emption, chain extended</td></tr>
+  </tbody>
+</table>
+</div>
+<p>One consequence surprised us at first and then seemed obviously right. A relay whose radio fails and a relay that crashes look identical from the outside, so the swarm handles both the same way. When the radio comes back, the aircraft is heard again, rejoins, and the role manager notices it has one relay too many. A test file audits the autonomy modules' source code for any read of simulator state, and 20 behavioural tests check that each disturbance is noticed rather than announced.</p>
+<p>Honesty cost us a little. When we switched the energy model from the true wind to the swarm's own estimate, completion dropped from 98.4% to 93.5%. The cause was a calibration fitted against ground-level wind, while the swarm now measures the stronger wind at cruise height. Refitting airspeed against the same logged flights brought it back to 97.3%.</p>
+
+<h2>7&nbsp;&nbsp;Evaluation</h2>
+<h3>7.1&nbsp;&nbsp;Scenarios and baseline</h3>
+<p>A scenario is a JSON file that fixes the terrain, seed, fleet, GCS, geofence, tasks, clock and a timeline of hidden disturbances. Positions can be given in metres or as a fraction along the valley, so one scenario works on any site. The disturbance types cover everything the Stage&nbsp;2 brief lists. Table&nbsp;3 summarises the four we ship.</p>
+
+<div class="tblwrap">
+<table>
+  <caption><b>Table 3.</b> Shipped scenarios (tasks: at launch + released later).</caption>
+  <thead><tr><th>Scenario</th><th class="num">UAVs</th><th class="num">Tasks</th><th class="num">Clock</th><th class="num">Hidden events</th></tr></thead>
+  <tbody>
+    <tr><td>Quickstart, synthetic valley</td><td class="num">5</td><td class="num">8 + 1</td><td class="num">12 min</td><td class="num">4</td></tr>
+    <tr><td>Kedarnath landslide</td><td class="num">6</td><td class="num">10 + 6</td><td class="num">15 min</td><td class="num">8</td></tr>
+    <tr><td>Uttarkashi earthquake</td><td class="num">5</td><td class="num">9 + 6</td><td class="num">15 min</td><td class="num">7</td></tr>
+    <tr><td>Stress, synthetic valley</td><td class="num">5</td><td class="num">8 + 7</td><td class="num">15 min</td><td class="num">11</td></tr>
+  </tbody>
+</table>
+</div>
+<p>The <b>baseline</b> keeps everything except the adaptive role layer: same flight control, energy-aware return, geofence, relay placement network and packet model. Roles are fixed at launch, one relay and the rest scouts, and aircraft relaunch in their original role. A failed relay is not replaced, a new P1 task waits for a free scout, nothing hands over and no one stands by. The gap between the two is what the adaptive autonomy is worth. Each scenario runs with three seeds, which vary radio fading, packet outcomes and, in the stress scenario, task placement.</p>
+<p><b>Metrics</b> follow the brief's categories. The priority-weighted score is</p>
+<div class="eq"><span class="body">S = Σ<sub>p</sub> w<sub>p</sub> δ<sub>p</sub> &nbsp;/&nbsp; Σ<sub>p</sub> w<sub>p</sub></span><span class="no">(7)</span></div>
+<p>where <i>δ<sub>p</sub></i>&nbsp;=&nbsp;1 if task <i>p</i>'s data reached the GCS by the deadline. The rest are defined in Table&nbsp;4. They are computed from the simulation itself, and never from what the swarm believes.</p>
+
+<div class="tblwrap">
+<table>
+  <caption><b>Table 4.</b> Metrics, grouped as in the brief.</caption>
+  <thead><tr><th style="width:22%">Group</th><th style="width:26%">Metric</th><th>Definition</th></tr></thead>
+  <tbody>
+    <tr><td>Mission</td><td>completion rate</td><td>tasks whose data reached the GCS before the deadline, over tasks released</td></tr>
+    <tr><td></td><td>emergency response</td><td>release of a new task to its data arriving at the GCS</td></tr>
+    <tr><td>Comms</td><td>packet delivery ratio</td><td>delivered over generated, telemetry and survey data together</td></tr>
+    <tr><td></td><td>latency</td><td>creation to arrival at the GCS, per telemetry packet</td></tr>
+    <tr><td></td><td>availability, downtime</td><td>airborne time with (and without) an end-to-end path of reliability ≥ 0.5</td></tr>
+    <tr><td>Autonomy</td><td>reallocations</td><td>every role change, logged with its reason</td></tr>
+    <tr><td></td><td>recovery time</td><td>disruption until every airborne aircraft has had a path for 1&nbsp;s; zero if none lost it</td></tr>
+    <tr><td></td><td>reconfiguration eff.</td><td>1 minus the share of role changes undone within 30&nbsp;s</td></tr>
+    <tr><td>Robustness</td><td>after faults</td><td>availability and PDR from the first disruption on</td></tr>
+    <tr><td>Safety</td><td>collisions, separation</td><td>pairs closer than 3&nbsp;m (per incident); closest approach</td></tr>
+    <tr><td></td><td>charge, geofence</td><td>aircraft that ran flat; excursions outside the polygon or ceiling</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h3>7.2&nbsp;&nbsp;Results</h3>
+<p>Fig.&nbsp;10 compares the two strategies over all 12 runs each. The adaptive swarm is ahead on every mission and communication metric. The biggest gap is how quickly a new emergency gets answered: 42&nbsp;s against 180&nbsp;s, because the baseline has to wait for a scout to become free while ours pre-empts one or turns one round. Downtime and recovery time are both roughly halved, because the chain is re-sized and re-staffed instead of being left as it was launched.</p>
+
+</div>
+
+<figure class="wide">
+<img src="figs/fig_results.svg" alt="Dot plot and bars comparing the adaptive swarm with the fixed-role baseline.">
+<figcaption><b>Fig. 10.</b> Adaptive C-DAWN against the fixed-role baseline, mean of 12 runs each (4 scenarios × 3 seeds). Left: percentages (dots, since the axis is zoomed). Right: times in seconds. Neither strategy had a collision, a geofence violation or a flat battery.</figcaption>
+</figure>
+
+<figure class="wide">
+<img src="figs/fig_timeline.svg" alt="Gantt chart of six UAVs through the Kedarnath mission with numbered disturbances and tasks delivered over time.">
+<figcaption><b>Fig. 11.</b> One Kedarnath run, taken from its logs. Disturbances: <b>1</b> relay UAV-1 fails, <b>2</b> GCS receiver outage, <b>3</b> 30% packet loss, <b>4</b> P1 region reported, <b>5</b> interference zone, <b>6</b> relay battery fault, <b>7</b> late P1 report. At 1 the swarm notices UAV-1's silence and promotes UAV-6 into its slot. At 4 two scouts that were heading home are turned round, and the region is delivered by about 430&nbsp;s. After 6 the faulty relay's measured drain rises and it comes home early. Event 7 arrives with 300&nbsp;s left, and its round trip does not fit, so the planner declines it.</figcaption>
+</figure>
+
+<div class="cols">
+
+<div class="tblwrap">
+<table>
+  <caption><b>Table 5.</b> Adaptive results per scenario (mean of 3 seeds).</caption>
+  <thead><tr><th>Scenario</th><th class="num">Compl.</th><th class="num">PDR</th><th class="num">Avail.</th><th class="num">Recov.</th><th class="num">Min batt.</th></tr></thead>
+  <tbody>
+    <tr><td>Quickstart</td><td class="num">100.0%</td><td class="num">95.4%</td><td class="num">93.9%</td><td class="num">4.6 s</td><td class="num">24.1%</td></tr>
+    <tr><td>Kedarnath</td><td class="num">93.8%</td><td class="num">97.2%</td><td class="num">95.8%</td><td class="num">8.9 s</td><td class="num">10.5%</td></tr>
+    <tr><td>Uttarkashi</td><td class="num">100.0%</td><td class="num">100.0%</td><td class="num">100.0%</td><td class="num">0.0 s</td><td class="num">29.4%</td></tr>
+    <tr><td>Stress</td><td class="num">95.6%</td><td class="num">94.3%</td><td class="num">91.5%</td><td class="num">13.3 s</td><td class="num">21.3%</td></tr>
+  </tbody>
+</table>
+</div>
+<p>Table&nbsp;5 breaks the adaptive numbers down, and Fig.&nbsp;11 follows one Kedarnath run from start to finish. Three observations stand out. Uttarkashi is a draw with the baseline. The Bhagirathi valley there is straight and open, one relay covers everything, and adaptation has little to win, which is what it should look like. The stress scenario is the hardest on communication, and its 13&nbsp;s mean recovery is dominated by a 60&nbsp;s severed link and a 25&nbsp;s GCS outage that no amount of re-planning can fix, only wait out. Finally, the adaptive swarm flies its batteries harder, down to 10.5% in Kedarnath against 34% for the baseline on average. That is still above the 8% landing reserve, and it is the price of keeping aircraft working instead of parking them.</p>
+
+<h3>7.3&nbsp;&nbsp;What did not work</h3>
+<p>We think a report is more useful when it says what went wrong. Our first energy model was about 1.8 times too pessimistic and sent full-battery scouts home before they had done anything. Tasks were once left assigned to a scout that had died, so nobody else picked them up. The liquid time-constant controller [5] we originally proposed to fly the aircraft lost to a well-tuned cascaded PID in 16 of 16 paired gust trials (0.62&nbsp;m against 0.18&nbsp;m cross-track error), so the PID flies and the LTC runs in shadow. The causal link diagnosis [6] never blames terrain for interference, but it confirms genuine terrain shadow only about 20% of the time. The geometry is against it: climbing one end of a link lifts the path over a far ridge by very little.</p>
+
+<h2>8&nbsp;&nbsp;Software and Reproducibility</h2>
+
+<figure>
+<img src="figs/dashboard.png" alt="Screenshot of the C-DAWN operator console during the Kedarnath mission." style="border:0.5pt solid #b9b6ad">
+<figcaption><b>Fig. 12.</b> The operator console during a live Kedarnath run: real terrain, the geofence, the relay chain, survey sites by priority, the swarm list with hop counts, the communication and roles panel, and the challenge metrics along the bottom. Disturbances can be injected live from the same console.</figcaption>
+</figure>
+
+<p>The code is Python 3.10+ with PyTorch for the placement network, FastAPI and WebSockets for the GCS server, and React with Three.js for the console. Nothing needs a GPU or an internet connection once installed: terrain packs and trained weights ship in the repository. Three commands cover what a judge needs.</p>
+<pre class="cmds"><span class="c"># watch a mission live in the console</span>
+python run_node.py --autostart \
+  --scenario kedarnath_landslide
+<span class="c"># one headless run, 5 to 9x real time</span>
+python run_scenario.py \
+  scenarios/uttarkashi_earthquake.json
+<span class="c"># all scenarios, 3 seeds, both strategies</span>
+python -m bench.uavx_suite</pre>
+<p>For a live demonstration the same code can be split across three laptops on one Wi-Fi network (Fig.&nbsp;13). This is not three copies of one screen: work really moves between machines, and it moves back if a machine goes quiet.</p>
+
+<figure>
+<div class="figbox">
+<svg viewBox="0 0 460 184" role="img" aria-label="Three-laptop deployment: ALPHA runs the simulation and autonomy and streams telemetry; BRAVO runs relay placement and causal diagnosis; CHARLIE runs situation reports; work returns to ALPHA if an edge goes quiet for 1.5 seconds.">
+  <defs><marker id="a8" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#1b1b19"/></marker></defs>
+  <g font-size="11.5" fill="#1b1b19" text-anchor="middle">
+    <rect x="160" y="10" width="140" height="58" rx="5" fill="#e8f0fb" stroke="#2a78d6"/><text x="230" y="30" font-weight="700">ALPHA</text><text x="230" y="45" font-size="10.5">simulation + autonomy</text><text x="230" y="59" font-size="10.5">authoritative state</text>
+    <rect x="10" y="104" width="150" height="54" rx="5" fill="#fde7dc" stroke="#eb6834"/><text x="85" y="124" font-weight="700">BRAVO</text><text x="85" y="139" font-size="10.5">relay placement (GNN)</text><text x="85" y="152" font-size="10.5">causal link diagnosis</text>
+    <rect x="300" y="104" width="150" height="54" rx="5" fill="#f3f1ea" stroke="#1b1b19"/><text x="375" y="124" font-weight="700">CHARLIE</text><text x="375" y="139" font-size="10.5">detections, SITREPs</text><text x="375" y="152" font-size="10.5">GCS console</text>
+    <path d="M170 68 L110 102" stroke="#1b1b19" marker-end="url(#a8)"/><path d="M290 68 L350 102" stroke="#1b1b19" marker-end="url(#a8)"/>
+    <text x="136" y="82" font-size="10" text-anchor="end">telemetry, 20 Hz</text><text x="326" y="82" font-size="10" text-anchor="start">telemetry, 20 Hz</text>
+    <path d="M140 104 L196 70" stroke="#eb6834" stroke-dasharray="4 3" marker-end="url(#a8)"/><text x="178" y="104" font-size="10" fill="#c2410c" text-anchor="start">stations, do(Δz)</text>
+    <path d="M320 104 L264 70" stroke="#4d4c47" stroke-dasharray="4 3" marker-end="url(#a8)"/><text x="262" y="96" font-size="10" fill="#4d4c47">reports</text>
+    <text x="230" y="176" font-size="10" fill="#4a3aa7">silent for 1.5 s: ALPHA takes the work back</text>
+  </g>
+</svg>
+</div>
+<figcaption><b>Fig. 13.</b> Three-laptop deployment. ALPHA owns the aircraft. BRAVO and CHARLIE compute on the live stream and push results back, which ALPHA applies. Every laptop serves the full console, so any of them can go on the projector.</figcaption>
+</figure>
+
+<p>Every run writes a standard log set: run metadata with the code version, the resolved scenario, an event stream, 1&nbsp;Hz aircraft state and link tables, a per-packet log and the metrics. When the organisers publish their log format, one module, <code>mission/recorder.py</code>, is the adapter point. There are 158 automated tests, covering the physics, the radio model, the placement network's equivariance, failover, handover, traffic, every disturbance type and the truth-boundary audit.</p>
+
+<h2>9&nbsp;&nbsp;Limitations and Stage 2 Plan</h2>
+<p>This is a simulation. C-DAWN runs on its own Python simulator, which the brief allows as an equivalent to PX4, Gazebo or ns-3, because it lets terrain, radio and flight share one model. The autonomy only ever talks to an aircraft through setpoints, so for Stage&nbsp;2 we plan a PX4 SITL and ROS&nbsp;2 bridge that replaces the physics and controller hooks and leaves the autonomy untouched. Three other things are on the list: a contention-aware MAC model, since today airtime is modelled per hop but not shared; the organisers' log format; and position estimation from a proper filter rather than the true position plus an injected GNSS offset. Air density does not change with altitude yet. Survey detections come from each site's category rather than from imagery, and the situation reports are templates.</p>
+
+<h2>10&nbsp;&nbsp;Conclusion</h2>
+<p>A swarm that surveys a disaster valley is only useful if what it sees gets home. By treating the link to the GCS as part of the mission, sizing the relay chain from the terrain, handing relay stations over before a battery forces the issue, and making the swarm find out about trouble the way a fielded one would, C-DAWN delivered 97% of its tasks through 30 hidden disturbances without losing an aircraft to its own planning. The next step is putting the same autonomy on PX4 and, after that, on real airframes.</p>
+
+<h2>References</h2>
+<ol class="refs">
+  <li>ITU-R, "Propagation by diffraction," Recommendation P.526-15, 2019.</li>
+  <li>H. T. Friis, "A note on a simple transmission formula," <i>Proc. IRE</i>, vol. 34, no. 5, pp. 254 to 256, 1946.</li>
+  <li>V. G. Satorras, E. Hoogeboom and M. Welling, "E(n) equivariant graph neural networks," in <i>Proc. ICML</i>, 2021.</li>
+  <li>İ. Bekmezci, O. K. Sahingoz and Ş. Temel, "Flying ad-hoc networks (FANETs): A survey," <i>Ad Hoc Networks</i>, vol. 11, no. 3, pp. 1254 to 1270, 2013.</li>
+  <li>R. Hasani, M. Lechner, A. Amini, D. Rus and R. Grosu, "Liquid time-constant networks," in <i>Proc. AAAI</i>, 2021.</li>
+  <li>J. Pearl, <i>Causality: Models, Reasoning and Inference</i>, 2nd ed. Cambridge University Press, 2009.</li>
+  <li>K. Fall, "A delay-tolerant network architecture for challenged internets," in <i>Proc. ACM SIGCOMM</i>, 2003.</li>
+  <li>U.S. Department of Defense, "Flying qualities of piloted aircraft," MIL-F-8785C (Dryden turbulence model), 1980.</li>
+  <li>European Space Agency, "Copernicus DEM," and AWS Open Data Terrain Tiles, accessed 2026.</li>
+  <li>EOX IT Services, "Sentinel-2 cloudless," s2maps.eu, CC BY 4.0.</li>
+  <li>J. Scherer <i>et al.</i>, "An autonomous multi-UAV system for search and rescue," in <i>Proc. ACM DroNet</i>, 2015.</li>
+</ol>
+
+</div>
+</body>
+</html>
