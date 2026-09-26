@@ -31,7 +31,7 @@ plt.rcParams.update({
     "axes.edgecolor": INK2, "axes.linewidth": 0.6, "axes.labelcolor": INK,
     "xtick.color": INK2, "ytick.color": INK2, "xtick.major.width": 0.5, "ytick.major.width": 0.5,
     "xtick.major.size": 2.5, "ytick.major.size": 2.5, "legend.frameon": False,
-    "legend.fontsize": 7, "svg.fonttype": "none", "axes.spines.top": False,
+    "legend.fontsize": 7, "svg.fonttype": "none", "pdf.fonttype": 42, "axes.spines.top": False,
     "axes.spines.right": False, "grid.color": GRID, "grid.linewidth": 0.5,
 })
 
@@ -46,7 +46,7 @@ def chain():
     ls = LightSource(azdeg=315, altdeg=40)
     shade = ls.shade(hm, cmap=plt.get_cmap("gist_earth"), vert_exag=2.0, blend_mode="soft",
                      vmin=hm.min() - 400, vmax=hm.max() + 200)
-    fig, ax = plt.subplots(figsize=(3.45, 2.35))
+    fig, ax = plt.subplots(figsize=(3.45, 2.05))
     ax.imshow(shade, origin="lower", extent=[0, size, 0, size], interpolation="bilinear")
     km = lambda v: v
     fx = [q[0] for q in d["fence"]] + [d["fence"][0][0]]
@@ -85,7 +85,7 @@ def chain():
     for sp in ("left", "top", "right"):
         ax.spines[sp].set_visible(False)
     fig.tight_layout(pad=0.2)
-    fig.savefig(OUT / "fig_chain.svg")
+    fig.savefig(OUT / "fig_chain.svg"); fig.savefig(OUT / "fig_chain.pdf")
 
 
 def energy():
@@ -108,7 +108,7 @@ def energy():
     ax.grid(axis="y")
     ax.set_axisbelow(True)
     fig.subplots_adjust(left=0.12, right=0.66, top=0.95, bottom=0.22)
-    fig.savefig(OUT / "fig_energy.svg")
+    fig.savefig(OUT / "fig_energy.svg"); fig.savefig(OUT / "fig_energy.pdf")
 
 
 def timeline():
@@ -142,7 +142,7 @@ def timeline():
         if e["type"] == "DATA_DELIVERED":
             delivered.append(e["mission_t"])
 
-    fig, (ax, ax2) = plt.subplots(2, 1, figsize=(7.1, 2.6), sharex=True,
+    fig, (ax, ax2) = plt.subplots(2, 1, figsize=(7.1, 2.25), sharex=True,
                                   gridspec_kw={"height_ratios": [3.2, 1], "hspace": 0.12})
     uavs = sorted(rows)
     for i, u in enumerate(uavs):
@@ -171,7 +171,7 @@ def timeline():
                (("scout", "scout"), ("relay", "relay"), ("home", "returning / standby"),
                 ("pad", "on pad (swap, ready)"))]
     handles.append(Patch(facecolor="white", edgecolor=VIOLET, hatch="////", label="failed"))
-    fig.legend(handles=handles, loc="lower center", bbox_to_anchor=(0.5, 0.0), ncol=5, fontsize=6.4)
+    fig.legend(handles=handles, loc="lower center", bbox_to_anchor=(0.5, -0.02), ncol=5, fontsize=6.4, frameon=False)
     ax.set_ylim(len(uavs) - 0.4, -1.05)
     ax.spines["left"].set_visible(False)
     ax.tick_params(axis="y", length=0)
@@ -182,9 +182,9 @@ def timeline():
     ax2.set_xlabel("mission time (s)")
     ax2.set_xlim(0, 900)
     ax2.grid(axis="y")
-    fig.subplots_adjust(left=0.07, right=0.99, top=0.95, bottom=0.21)
+    fig.subplots_adjust(left=0.07, right=0.99, top=0.95, bottom=0.27)
     print("timeline events:", [(round(t), l) for t, l in events])
-    fig.savefig(OUT / "fig_timeline.svg")
+    fig.savefig(OUT / "fig_timeline.svg"); fig.savefig(OUT / "fig_timeline.pdf")
 
 
 def results():
@@ -228,7 +228,7 @@ def results():
     ax2.grid(axis="x")
     ax2.set_axisbelow(True)
     fig.subplots_adjust(left=0.16, right=0.98, top=0.86, bottom=0.22)
-    fig.savefig(OUT / "fig_results.svg")
+    fig.savefig(OUT / "fig_results.svg"); fig.savefig(OUT / "fig_results.pdf")
 
 
 if __name__ == "__main__":
