@@ -95,6 +95,13 @@ class RelayOptimizer:
         # Terrain-aware hop points from the role manager's link-budget chain.
         # When there is one per relay they replace the evenly spaced anchors.
         self.chain_hint: list = []
+        # The swarm's measurements (mesh/awareness.py), refreshed by the
+        # controller: area-wide noise floor, extra path loss the terrain
+        # model does not explain, and the cloud base it has found. The
+        # optimiser plans against these — never against injected truth.
+        self.measured_noise_dbm: Optional[float] = None
+        self.link_offset_db: float = 0.0
+        self.ceiling_agl: Optional[float] = None
 
     @staticmethod
     def _load_model(path: str):
@@ -152,15 +159,15 @@ class RelayOptimizer:
         if not scout_indices:
             return {"status": "no_scouts"}
 
-        # Jamming raises the effective noise floor for every link
+        # A measured area-wide noise rise raises the effective floor for every link
         jamming = None
-        if rf_channel is not None and getattr(rf_channel, "jamming_active", False):
+        base_floor = float(getattr(rf_channel, "base_noise_floor", -100.0)) if rf_channel is not None else -100.0
+        if self.measured_noise_dbm is not None and self.measured_noise_dbm - base_floor > 3.0:
             n = len(ids)
-            jamming = torch.full((n, n),
-                                 float(rf_channel.jamming_power_dbm),
-                                 dtype=torch.float32)
+            jamming = torch.full((n, n), float(self.measured_noise_dbm), dtype=torch.float32)
 
-        # A jammer located by the EW response enters the link budget itself
+        # Interference sources the swarm has LOCALISED (estimates, not truth)
+        # enter the link budget themselves
         located = []
         if rf_channel is not None:
             located = getattr(rf_channel, "ew_emitters", None) or []
@@ -170,9 +177,10 @@ class RelayOptimizer:
                      float(e["power_dbm"])) for e in located]
         self.rf.emitters = emitters
         self.rf_soft.emitters = emitters
-        # Weather loss shrinks every link budget, so the relays have to close
-        # up: the optimiser must plan against the channel as it is now.
-        weather_loss = float(getattr(rf_channel, "extra_loss_db", 0.0) or 0.0)
+        # Extra measured path loss (wet antennas, degradation) shrinks every
+        # link budget, so the relays have to close up: the optimiser plans
+        # against the channel as the swarm measures it now.
+        weather_loss = float(self.link_offset_db or 0.0)
         self.rf.extra_loss_db = weather_loss
         self.rf_soft.extra_loss_db = weather_loss
 
@@ -268,8 +276,7 @@ class RelayOptimizer:
             station[2] = float(np.clip(
                 station[2],
                 ground + self.world.min_agl + 15.0,
-                ground + min(self.world.max_agl,
-                             getattr(self.world, "ceiling_agl", None) or self.world.max_agl),
+                ground + min(self.world.max_agl, self.ceiling_agl or self.world.max_agl),
             ))
             size = self.world.terrain.config.size_m
             station[0] = float(np.clip(station[0], 30.0, size - 30.0))

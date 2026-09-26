@@ -1,14 +1,14 @@
 {
   "summary": {
     "mission": {
-      "mission_time_s": 658.0,
+      "mission_time_s": 677.0,
       "time_limit_s": 720.0,
       "tasks_total": 9,
       "tasks_released": 9,
       "tasks_surveyed": 9,
       "tasks_delivered": 9,
       "completion_rate": 1.0,
-      "completion_time_s": 332.3,
+      "completion_time_s": 336.5,
       "priority_weighted_score": 1.0,
       "within_time_limit": true,
       "emergent_tasks": [
@@ -16,11 +16,11 @@
           "id": "POI-009",
           "priority": 1,
           "released_s": 300.0000000000171,
-          "surveyed_after_s": 31.739999999971133,
-          "delivered_after_s": 32.3111999999706
+          "surveyed_after_s": 35.979999999967276,
+          "delivered_after_s": 36.51119999996678
         }
       ],
-      "emergent_response_s_mean": 32.3111999999706,
+      "emergent_response_s_mean": 36.51119999996678,
       "uavs_on_pads": [
         "UAV-2",
         "UAV-3",
@@ -32,50 +32,50 @@
       ]
     },
     "communication": {
-      "packet_delivery_ratio": 0.954875283446712,
-      "pdr_telemetry": 0.9537424453742446,
+      "packet_delivery_ratio": 0.952938527358703,
+      "pdr_telemetry": 0.951765520424648,
       "pdr_survey_data": 1.0,
-      "latency_ms_mean": 7.704265171823802,
-      "latency_ms_p95": 11.699999999990496,
+      "latency_ms_mean": 7.699830261879706,
+      "latency_ms_p95": 11.200000000030741,
       "survey_data_latency_s_mean": 0.2593333333333515,
-      "connectivity_availability": 0.9404656783008699,
-      "all_uavs_connected_fraction": 0.9512083903328723,
-      "downtime_s_total": 128.1,
-      "downtime_s_longest": 27.5,
-      "outage_count": 9,
+      "connectivity_availability": 0.9386389850057585,
+      "all_uavs_connected_fraction": 0.9491575524682183,
+      "downtime_s_total": 133.0,
+      "downtime_s_longest": 24.0,
+      "outage_count": 17,
       "packets": {
         "generated": {
-          "telemetry": 4302,
+          "telemetry": 4333,
           "survey": 108
         },
         "delivered": {
-          "telemetry": 4103,
+          "telemetry": 4124,
           "survey": 108
         },
         "dropped": {
-          "telemetry": 199,
+          "telemetry": 209,
           "survey": 0
         }
       },
       "survey_data_reopened": 0
     },
     "autonomy": {
-      "relay_reallocations": 9,
+      "relay_reallocations": 11,
       "handovers": 0,
       "role_flaps": 0,
       "reconfiguration_efficiency": 1.0,
-      "recovery_time_s_mean": 5.350000000002832,
-      "recovery_time_s_max": 32.10000000001699,
-      "disruptions": 6,
+      "recovery_time_s_mean": 4.728571428573539,
+      "recovery_time_s_max": 31.900000000016888,
+      "disruptions": 7,
       "disruptions_hitless": 5,
       "disruptions_unrecovered": 0,
-      "failover_ms_last": 0.17787504475563765,
-      "relay_solves": 671
+      "failover_ms_last": 300.14599901618055,
+      "relay_solves": 692
     },
     "robustness": {
       "after_first_disruption": {
-        "availability": 0.9196232339089482,
-        "pdr": 0.9386748844375963
+        "availability": 0.9173661630292855,
+        "pdr": 0.9362026862026862
       },
       "per_disruption": [
         {
@@ -116,11 +116,11 @@
             "until": 240.0000000000285
           },
           "hitless": false,
-          "recovery_s": 32.1,
+          "recovery_s": 31.9,
           "availability_before": 1.0,
-          "availability_after": 0.4666666666666667,
+          "availability_after": 0.44958333333333333,
           "pdr_before": 1.0,
-          "pdr_after": 0.5916666666666667
+          "pdr_after": 0.56875
         },
         {
           "kind": "packet_loss",
@@ -132,27 +132,40 @@
           },
           "hitless": true,
           "recovery_s": 0.0,
-          "availability_before": 0.4657762938230384,
-          "availability_after": 1.0,
-          "pdr_before": 0.5908141962421712,
-          "pdr_after": 0.9937629937629938
+          "availability_before": 0.4486644407345576,
+          "availability_after": 0.9966722129783694,
+          "pdr_before": 0.5678496868475992,
+          "pdr_after": 0.9958419958419958
         },
         {
           "kind": "relay_rth",
-          "t": 266.0,
+          "t": 264.0,
           "detail": {
-            "uav": "UAV-4"
+            "uav": "UAV-2"
           },
           "hitless": true,
           "recovery_s": 0.0,
-          "availability_before": 0.565,
-          "availability_after": 1.0,
-          "pdr_before": 0.6145833333333334,
-          "pdr_after": 0.99375
+          "availability_before": 0.5145833333333333,
+          "availability_after": 0.9966666666666667,
+          "pdr_before": 0.5875,
+          "pdr_after": 0.9958333333333333
         },
         {
           "kind": "relay_rth",
-          "t": 472.1,
+          "t": 290.5,
+          "detail": {
+            "uav": "UAV-4"
+          },
+          "hitless": false,
+          "recovery_s": 1.2,
+          "availability_before": 0.9520833333333333,
+          "availability_after": 0.9983361064891847,
+          "pdr_before": 0.9625,
+          "pdr_after": 0.9979716024340771
+        },
+        {
+          "kind": "relay_rth",
+          "t": 484.3,
           "detail": {
             "uav": "UAV-5"
           },
@@ -170,22 +183,22 @@
       "near_misses": 0,
       "min_separation_m": 19.02,
       "terrain_contacts": 0,
-      "conflicts_resolved": 2,
+      "conflicts_resolved": 5,
       "geofence_violations": 0,
       "geofence_violation_s": 0.0,
       "altitude_violations": 0,
       "battery_depleted": 0,
-      "min_battery_pct": 25.0,
-      "min_landing_battery_pct": 25.0,
+      "min_battery_pct": 23.5,
+      "min_landing_battery_pct": 23.5,
       "landings": 4
     }
   },
   "indicative_scores": {
     "mission_completion": 100.0,
-    "communication_resilience": 94.8,
+    "communication_resilience": 94.6,
     "relay_role_management": 100.0,
-    "fault_recovery": 83.3,
+    "fault_recovery": 85.7,
     "safety": 100.0,
-    "weighted_95pct_of_rubric": 96.0
+    "weighted_95pct_of_rubric": 96.3
   }
 }

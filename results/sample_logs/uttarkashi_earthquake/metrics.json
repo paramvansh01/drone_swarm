@@ -1,14 +1,14 @@
 {
   "summary": {
     "mission": {
-      "mission_time_s": 582.0,
+      "mission_time_s": 556.5,
       "time_limit_s": 900.0,
       "tasks_total": 15,
       "tasks_released": 15,
       "tasks_surveyed": 15,
       "tasks_delivered": 15,
       "completion_rate": 1.0,
-      "completion_time_s": 389.9,
+      "completion_time_s": 364.8,
       "priority_weighted_score": 1.0,
       "within_time_limit": true,
       "emergent_tasks": [
@@ -23,39 +23,39 @@
           "id": "POI-011",
           "priority": 1,
           "released_s": 329.9999999999898,
-          "surveyed_after_s": 59.35999999994601,
-          "delivered_after_s": 59.90559999994554
+          "surveyed_after_s": 34.21999999996888,
+          "delivered_after_s": 34.805599999968365
         },
         {
           "id": "POI-012",
           "priority": 1,
           "released_s": 329.9999999999898,
-          "surveyed_after_s": 16.719999999984793,
-          "delivered_after_s": 17.30559999998428
+          "surveyed_after_s": 10.559999999990396,
+          "delivered_after_s": 11.10559999998992
         },
         {
           "id": "POI-013",
           "priority": 1,
           "released_s": 329.9999999999898,
-          "surveyed_after_s": 32.51999999997042,
-          "delivered_after_s": 33.111699999969915
+          "surveyed_after_s": 10.079999999990832,
+          "delivered_after_s": 10.605599999990375
         },
         {
           "id": "POI-014",
           "priority": 1,
           "released_s": 329.9999999999898,
-          "surveyed_after_s": 36.97999999996637,
-          "delivered_after_s": 37.50559999996591
+          "surveyed_after_s": 29.679999999973006,
+          "delivered_after_s": 30.20559999997255
         },
         {
           "id": "POI-015",
           "priority": 1,
           "released_s": 329.9999999999898,
-          "surveyed_after_s": 34.13999999996895,
-          "delivered_after_s": 34.705599999968456
+          "surveyed_after_s": 28.17999999997437,
+          "delivered_after_s": 28.705599999973913
         }
       ],
-      "emergent_response_s_mean": 34.97328333330478,
+      "emergent_response_s_mean": 23.788933333314947,
       "uavs_on_pads": [
         "UAV-1",
         "UAV-3",
@@ -67,28 +67,28 @@
       ]
     },
     "communication": {
-      "packet_delivery_ratio": 0.9995685005393743,
-      "pdr_telemetry": 0.9995510662177329,
+      "packet_delivery_ratio": 0.9997802197802198,
+      "pdr_telemetry": 0.9997711670480549,
       "pdr_survey_data": 1.0,
-      "latency_ms_mean": 6.643476308105656,
+      "latency_ms_mean": 6.4880750743888225,
       "latency_ms_p95": 11.20000000000232,
-      "survey_data_latency_s_mean": 0.2568094444443927,
-      "connectivity_availability": 0.9999551066217733,
-      "all_uavs_connected_fraction": 0.999828060522696,
+      "survey_data_latency_s_mean": 0.2565494444443929,
+      "connectivity_availability": 0.9999542396924908,
+      "all_uavs_connected_fraction": 0.9998202731847592,
       "downtime_s_total": 0.1,
       "downtime_s_longest": 0.1,
       "outage_count": 1,
       "packets": {
         "generated": {
-          "telemetry": 4455,
+          "telemetry": 4370,
           "survey": 180
         },
         "delivered": {
-          "telemetry": 4453,
+          "telemetry": 4369,
           "survey": 180
         },
         "dropped": {
-          "telemetry": 2,
+          "telemetry": 1,
           "survey": 0
         }
       },
@@ -101,16 +101,16 @@
       "reconfiguration_efficiency": 1.0,
       "recovery_time_s_mean": 0.0,
       "recovery_time_s_max": 0.0,
-      "disruptions": 6,
-      "disruptions_hitless": 6,
+      "disruptions": 7,
+      "disruptions_hitless": 7,
       "disruptions_unrecovered": 0,
       "failover_ms_last": null,
-      "relay_solves": 606
+      "relay_solves": 607
     },
     "robustness": {
       "after_first_disruption": {
         "availability": 1.0,
-        "pdr": 0.9992912827781715
+        "pdr": 0.999634636463281
       },
       "per_disruption": [
         {
@@ -153,7 +153,20 @@
           "availability_before": 1.0,
           "availability_after": 1.0,
           "pdr_before": 1.0,
-          "pdr_after": 0.9979757085020243
+          "pdr_after": 1.0
+        },
+        {
+          "kind": "relay_rth",
+          "t": 315.0,
+          "detail": {
+            "uav": "UAV-1"
+          },
+          "hitless": true,
+          "recovery_s": 0.0,
+          "availability_before": 1.0,
+          "availability_after": 1.0,
+          "pdr_before": 1.0,
+          "pdr_after": 1.0
         },
         {
           "kind": "packet_loss",
@@ -168,7 +181,7 @@
           "availability_before": 1.0,
           "availability_after": 1.0,
           "pdr_before": 1.0,
-          "pdr_after": 0.9979591836734694
+          "pdr_after": 1.0
         },
         {
           "kind": "uav_failure",
@@ -202,15 +215,15 @@
     "safety": {
       "collisions": 0,
       "near_misses": 0,
-      "min_separation_m": 14.97,
+      "min_separation_m": 10.88,
       "terrain_contacts": 0,
-      "conflicts_resolved": 4,
+      "conflicts_resolved": 5,
       "geofence_violations": 0,
       "geofence_violation_s": 0.0,
       "altitude_violations": 0,
       "battery_depleted": 0,
-      "min_battery_pct": 27.4,
-      "min_landing_battery_pct": 27.4,
+      "min_battery_pct": 29.9,
+      "min_landing_battery_pct": 29.9,
       "landings": 3
     }
   },

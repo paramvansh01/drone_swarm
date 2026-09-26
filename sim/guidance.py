@@ -161,6 +161,11 @@ class GuidanceLayer:
         # Separation assurance, applied to every setpoint after planning
         self.deconfliction: Optional[Deconfliction] = Deconfliction(world)
 
+        # What the swarm believes about the other aircraft (heartbeats, acks,
+        # cloud). Set by the mission controller; standalone use keeps its own.
+        self.awareness = None
+        self._owns_awareness = False
+
         self.events: List[dict] = []
 
     # -- mission clock -------------------------------------------------------
@@ -254,15 +259,16 @@ class GuidanceLayer:
         return self.energy.travel_time(drone.position, poi.position)
 
     def _available_scouts(self, drones: Dict[str, Drone]) -> List[Drone]:
+        # Only aircraft the planner can still hear can be given new work
         return [d for d in drones.values()
-                if d.is_alive and d.role == DroneRole.SCOUT
+                if self._heard(d) and d.role == DroneRole.SCOUT
                 and self.phases.get(d.id) not in (MissionPhase.RTH, MissionPhase.LANDING)
                 and d.id not in self.manual_targets]
 
     def _divertible(self, drones: Dict[str, Drone]) -> List[Drone]:
         """Aircraft on a discretionary return that could be turned round."""
         return [d for d in drones.values()
-                if d.is_alive and self.phases.get(d.id) == MissionPhase.RTH
+                if self._heard(d) and self.phases.get(d.id) == MissionPhase.RTH
                 and self.rth_reasons.get(d.id, "").startswith(self.SOFT_RTH)]
 
     def _resume(self, drone: Drone, sim_time: float):
@@ -280,8 +286,8 @@ class GuidanceLayer:
         t = self.mission_time(sim_time)
         if t is None:
             return []
-        return [p for p in self.world.pois
-                if not p.surveyed and p.released(t) and p.id not in self.denied_pois]
+        return [p for p in self.world.pois if p.released(t)
+                and not p.surveyed and p.id not in self.denied_pois]
 
     def assign_targets(self, drones: Dict[str, Drone], sim_time: float):
         """
@@ -656,9 +662,57 @@ class GuidanceLayer:
 
     # -- per-tick update ----------------------------------------------------
 
+    @property
+    def _standalone(self) -> bool:
+        """
+        No radio model attached (guidance used on its own, e.g. in unit
+        tests): there are no link measurements to infer from, so a perfect
+        heartbeat channel is assumed. The mission controller always attaches
+        the real awareness layer, where everything below is inferred.
+        """
+        return self.awareness is None or self._owns_awareness
+
+    def _heard(self, drone) -> bool:
+        """Is the swarm still hearing this aircraft (heartbeat)?"""
+        if self._standalone:
+            return bool(drone.is_alive and not getattr(drone, "on_pad", False))
+        return self.awareness.believed_airborne(drone, 1.0)
+
+    def _release_silent(self, drones: Dict[str, Drone], sim_time: float):
+        """
+        Tasks held by an aircraft nobody has heard for LOST_S go back into the
+        pool. The planner does not know whether it crashed or lost its radio;
+        if it comes back and finishes the task anyway, the duplicate is dropped.
+        """
+        for drone_id in list(self.assignments):
+            drone = drones.get(drone_id)
+            if drone is None:
+                continue
+            silent = (not drone.is_alive) if self._standalone \
+                else self.awareness.suspected(drone_id, self.awareness.LOST_S)
+            if not silent:
+                continue
+            lost = self.assignments.pop(drone_id)
+            drone.assigned_poi = None
+            why = "lost" if self._standalone else \
+                f"not heard for {self.awareness.heard_ago(drone_id):.0f} s"
+            self.events.append({
+                "time": sim_time, "type": "REASSIGN", "drone": drone_id, "poi": lost,
+                "message": f"{lost} released for reassignment — {drone_id} {why}",
+            })
+
     def update(self, drones: Dict[str, Drone], sim_time: float, dt: float):
         """Advance mission state and write a setpoint onto every live drone."""
         self._drones = drones
+        if self.awareness is None:
+            from mesh.awareness import SwarmAwareness
+            self.awareness = SwarmAwareness(self.world)
+            self._owns_awareness = True
+        if self._owns_awareness:
+            self.awareness.update(drones, sim_time, dt)
+        # Fly under the cloud base the swarm has found for itself
+        self.ceiling_agl = self.awareness.ceiling_agl
+        self._release_silent(drones, sim_time)
         self.assign_targets(drones, sim_time)
 
         for drone in drones.values():
@@ -666,16 +720,9 @@ class GuidanceLayer:
                 self._update_charging(drone, sim_time, dt)
                 continue
             if not drone.is_alive:
+                # Its own autopilot is gone; nothing to fly. (The swarm finds
+                # out through its missing heartbeat, above.)
                 self.phases[drone.id] = MissionPhase.LANDED
-                # A lost aircraft's task goes back into the pool at once
-                lost = self.assignments.pop(drone.id, None)
-                if lost is not None:
-                    drone.assigned_poi = None
-                    self.events.append({
-                        "time": sim_time, "type": "REASSIGN", "drone": drone.id, "poi": lost,
-                        "message": f"{lost} released for reassignment — {drone.id} lost",
-                    })
-                self.relay_stations.pop(drone.id, None)
                 continue
 
             self._check_battery(drone, sim_time)
@@ -742,7 +789,10 @@ class GuidanceLayer:
         if self.phases.get(drone.id) in (MissionPhase.RTH, MissionPhase.LANDING):
             drone.lost_link_s = 0.0
             return
-        if getattr(drone, "connected", True):
+        # The aircraft's own evidence: acknowledgements from the GCS
+        linked = getattr(drone, "connected", True) if self._standalone \
+            else self.awareness.has_gcs_link(drone.id)
+        if linked:
             drone.lost_link_s = 0.0
             return
         drone.lost_link_s = getattr(drone, "lost_link_s", 0.0) + dt

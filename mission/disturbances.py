@@ -114,7 +114,7 @@ class Disturbances:
         drone = self._target(p.get("target") or p.get("uav") or p.get("drone_id"))
         role = drone.role.name
         drone.kill(self.sim.sim_time)
-        self.ctl.guidance.manual_targets.pop(drone.id, None)
+        # Nothing else is told: the swarm finds out from the missing heartbeat
         self._log("KILL_NODE", f"UAV FAILURE: {drone.id} ({role.lower()}) is down", {"drone_id": drone.id})
         return {"uav": drone.id, "role": role}
 

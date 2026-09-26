@@ -281,9 +281,10 @@ def make_scm_diagnostics_hook(diagnostics: OnlineDiagnostics):
                 distance = float(np.linalg.norm(d1.position - d2.position))
                 occlusion = world.compute_rf_occlusion_db(d1.position, d2.position)
                 antenna = d1.get_antenna_pose_factor(d2.position)
-                noise = rf_channel.noise_floor_dbm
-                if rf_channel.jamming_active:
-                    noise = rf_channel.jamming_power_dbm
+                # Measured at the receivers, not read from the channel model
+                readings = [x for x in (getattr(d1.sensors, "noise_dbm", None),
+                                        getattr(d2.sensors, "noise_dbm", None)) if x is not None]
+                noise = max(readings) if readings else rf_channel.base_noise_floor
 
                 # Observed loss = 1 - link_quality
                 link_quality = d1.neighbors.get(d2.id, 0.5)

@@ -81,7 +81,6 @@ class MissionInjects:
     def reset(self):
         self.rain_mm_h = 0.0
         self.cloud_base_agl = None
-        self.guidance.ceiling_agl = None
         self.world.ceiling_agl = None
         self.cells = []           # storm / downdraught cells
         self.denial = []          # GNSS degradation zones
@@ -103,13 +102,13 @@ class MissionInjects:
         rate = float(params.get("rate_mm_h", 45.0))
         self.rain_mm_h = rate
         self.cloud_base_agl = self._cloud_base(rate)
-        self.guidance.ceiling_agl = self.cloud_base_agl
+        # The true cloud base lives in the world; the swarm finds it with its
+        # optical sensors (mesh/awareness.py), it is not told
         self.world.ceiling_agl = self.cloud_base_agl
         # Convective rain is turbulent: the wind field gets rougher with it
         self.wind.rain_turbulence = 1.0 + rate / 35.0
         self.log("WEATHER", f"Heavy monsoon rainfall inbound — {rate:.0f} mm/h, cloud base down to "
-                            f"{self.cloud_base_agl:.0f} m AGL: the swarm must descend below it "
-                            "and fly under the ridge line. Turbulence up, "
+                            f"{self.cloud_base_agl:.0f} m AGL. Turbulence up, "
                             f"optical detection range down, wet-antenna loss "
                             f"{self.antenna_loss_db():.1f} dB per aircraft, power draw up "
                             f"{(self.power_factor() - 1) * 100:.0f}%.", {"rate_mm_h": rate})
@@ -224,7 +223,12 @@ class MissionInjects:
         self.wind.cells = self.cells
 
     def _update_navigation(self, dt, drones, sim_time):
-        """GPS denial: the believed position drifts until the swarm notices."""
+        """
+        GNSS degradation (physics): inside a zone the navigation solution
+        drifts, until the swarm has switched to terrain-relative navigation
+        (`nav_fallback`, set by the swarm's own detection), after which the
+        error is pulled back in.
+        """
         events = []
         if not self.denial:
             return events
@@ -250,13 +254,8 @@ class MissionInjects:
             drone.nav_error = error
             worst = max(worst, float(np.linalg.norm(error)))
 
-        # Detection: the mesh knows the ranges between aircraft from the radio
-        # link, and those stop agreeing with the GNSS solution.
-        if not self.nav_fallback and worst > 45.0:
-            self.nav_fallback = True
-            events.append(("GNSS", "GNSS solution disagrees with mesh ranging by "
-                                 f"{worst:.0f} m — switching the swarm to terrain-relative "
-                                 "navigation and disregarding GNSS.", {}))
+        # No detection here: the swarm notices the drift itself, from radio
+        # ranging (mesh/awareness.py), and sets `nav_fallback`
         return events
 
     def _apply_faults(self, drones):

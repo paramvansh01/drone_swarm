@@ -114,8 +114,12 @@ export function SwarmPanel({ telemetry, onSelect, run, selectedId }) {
     SCOUT: 'SCT', RELAY: 'RLY', STANDBY: d.status === 'RETURNING' ? 'RTH' : 'STB',
   }[d.role] ?? '—'));
 
+  // The swarm's own view: aircraft nobody can currently hear
+  const silent = new Set(telemetry?.mission?.awareness?.suspected || []);
+
   const describe = (d) => {
-    if (d.status === 'KILLED') return 'FAILED';
+    if (d.status === 'KILLED') return silent.has(d.id) ? 'FAILED · swarm: not heard' : 'FAILED';
+    if (silent.has(d.id) && !ground.includes(d.status)) return 'NOT HEARD by the swarm (radio out?)';
     if (d.status === 'CHARGING') return `on pad · recharging ${fmt(d.battery, 0)}%`;
     if (d.status === 'READY') return 'on pad · charged, ready to launch';
     const link = !d.radio_ok ? 'radio out' : d.connected ? `${d.hops} hop${d.hops === 1 ? '' : 's'} to GCS` : 'NO LINK';

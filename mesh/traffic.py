@@ -22,8 +22,13 @@ Two traffic classes:
               custody at the node holding it and is forwarded when a route
               appears (store-and-forward). An aircraft landing at the GCS
               offloads its backlog over the wire. A target's data is
-              *delivered* once all of its chunks have arrived; if the aircraft
-              holding some of them is lost, the target is re-opened for survey.
+              *delivered* once all of its chunks have arrived. Chunks aboard an
+              aircraft that goes down are simply gone; the GCS notices only
+              that they never arrive and the carrier has gone silent, and then
+              re-opens the target (see DemoController._reopen_lost_data).
+
+Every delivered packet is acknowledged back to its source. Those
+acknowledgements are the only way an aircraft knows it has a link home.
 
 Each hop is attempted up to 1 + MAX_RETRIES times (link-layer ARQ). Every
 attempt costs airtime, so a marginal link shows up as latency before it shows
@@ -65,9 +70,11 @@ class TrafficSimulator:
     CONNECTED_Q = 0.5             # end-to-end path reliability counted as "connected"
     MAX_LOG = 200_000
 
-    def __init__(self, world, gcs_id: str = "GCS", seed: int = 5):
+    def __init__(self, world, gcs_id: str = "GCS", seed: int = 5, on_ack=None):
         self.world = world
         self.gcs_id = gcs_id
+        # Called (source_id, time) for every packet the GCS receives: the ack
+        self.on_ack = on_ack
         self._rng = np.random.default_rng(seed)
         self.reset()
 
@@ -78,7 +85,7 @@ class TrafficSimulator:
         self.log: List[Packet] = []
         self._packetised: set = set()
         self._chunks_left: Dict[str, int] = {}
-        self._chunks_lost: Dict[str, int] = {}
+        self._chunk_total: Dict[str, int] = {}
         self.reopened: List[dict] = []
 
         self.generated = {"telemetry": 0, "survey": 0}
@@ -107,11 +114,13 @@ class TrafficSimulator:
         if delivered:
             pkt.delivered_at = t
             self.delivered[pkt.kind] += 1
+            if self.on_ack is not None:
+                self.on_ack(pkt.src, t)
             self.latency_ms[pkt.kind].append((t - pkt.created) * 1000.0)
             if pkt.kind == "survey" and pkt.poi:
                 left = self._chunks_left.get(pkt.poi, 0) - 1
                 self._chunks_left[pkt.poi] = left
-                if left <= 0 and not self._chunks_lost.get(pkt.poi):
+                if left <= 0:
                     if self.world.mark_poi_delivered(pkt.poi, t):
                         self.events.append({
                             "time": t, "type": "DATA_DELIVERED", "poi": pkt.poi,
@@ -209,7 +218,7 @@ class TrafficSimulator:
             self._packetised.add(poi.id)
             n = max(int(getattr(poi, "data_chunks", 12)), 1)
             self._chunks_left[poi.id] = n
-            self._chunks_lost[poi.id] = 0
+            self._chunk_total[poi.id] = n
             for _ in range(n):
                 self._new_packet(holder, "survey", t, poi=poi.id, priority=int(poi.priority))
 
@@ -231,19 +240,19 @@ class TrafficSimulator:
                     self._finish(pkt, t, True)
                 else:
                     self._finish(pkt, t, False, "carrier lost")
-                    self._lose_chunk(pkt, t, d_id)
 
-    def _lose_chunk(self, pkt: Packet, t: float, carrier: str):
-        poi_id = pkt.poi
-        if not poi_id:
-            return
-        self._chunks_lost[poi_id] = self._chunks_lost.get(poi_id, 0) + 1
-        if self._chunks_lost[poi_id] > 1:
-            return      # already re-opened for this loss
+    def delivered_chunks(self, poi_id: str) -> int:
+        """How many chunks of this target's data the GCS has received."""
+        return self._chunk_total.get(poi_id, 0) - self._chunks_left.get(poi_id, 0)
+
+    def reopen(self, poi_id: str, t: float, carrier: str, reason: str):
+        """
+        The GCS writes off a target's outstanding data and re-opens it for
+        survey. Called by the GCS's own logic, never by the network model.
+        """
         poi = next((p for p in self.world.pois if p.id == poi_id), None)
         if poi is None or poi.delivered:
             return
-        # The survey has to be flown again: its data went down with the aircraft
         poi.surveyed = False
         poi.surveyed_by = None
         poi.surveyed_at = None
@@ -251,9 +260,9 @@ class TrafficSimulator:
         self.reopened.append({"time": t, "poi": poi_id, "carrier": carrier})
         self.events.append({
             "time": t, "type": "DATA_LOST", "poi": poi_id, "drone": carrier,
-            "message": f"{poi_id} survey data lost with {carrier} — target re-opened",
+            "message": f"{poi_id} data written off — {reason}; target re-opened",
         })
-        # Chunks of the old batch already in custody elsewhere are now moot
+        # Any stray chunks of the old batch are superseded by the re-survey
         for q in self.queues.values():
             for other in list(q):
                 if other.kind == "survey" and other.poi == poi_id:

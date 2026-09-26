@@ -180,6 +180,10 @@ def build_edge_computer(role: NodeRole):
             state["last_topology"] = now
             optimizer.chain_hint = [np.asarray(p, dtype=float) for p in
                                     ((mission.get("roles") or {}).get("chain_points") or [])]
+            aware = mission.get("awareness") or {}
+            optimizer.measured_noise_dbm = aware.get("global_noise_dbm")
+            optimizer.link_offset_db = aware.get("link_offset_db") or 0.0
+            optimizer.ceiling_agl = aware.get("ceiling_agl")
             # The interference source ALPHA's response has localised, if any
             ew = ((telemetry.get("rf") or {}).get("ew") or {})
             outcome = optimizer.optimize(
@@ -196,11 +200,7 @@ def build_edge_computer(role: NodeRole):
         # and need a steady stream of loss samples.
         if causal is not None:
             rf = telemetry.get("rf", {}) or {}
-            rf_proxy = SimpleNamespace(
-                jamming_active=bool(rf.get("jamming_active")),
-                jamming_power_dbm=rf.get("jamming_power_dbm") or -200.0,
-                noise_floor_dbm=rf.get("noise_floor_dbm", -100.0),
-            )
+            rf_proxy = SimpleNamespace(base_noise_floor=-100.0)
             causal.update(mirror, rf_proxy, sim_time)
 
             # Interventions are commands, not observations: the climb has to
@@ -274,6 +274,7 @@ def _sync_mirror(mirror: dict, drones_raw: dict):
             drone.battery = float(st.get("battery", 100.0))
             drone.neighbors = dict(st.get("neighbors", {}))
             drone.gcs_link = float(st.get("gcs_link", 0.0))
+            drone.sensors.noise_dbm = st.get("noise_dbm")
             drone.sensors.rssi = dict(st.get("rssi", {}))
         except (KeyError, ValueError) as exc:
             logger.debug("Skipping drone %s in mirror: %s", drone_id, exc)

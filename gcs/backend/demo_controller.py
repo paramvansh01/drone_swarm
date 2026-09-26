@@ -19,7 +19,9 @@ The swarm's autonomy is layered, fastest first:
 
     deconfliction   every tick     separation between aircraft
     guidance        every tick     tasking, routes, RTH, landing, geofence
-    election        100 ms         relay failure -> promote a scout
+    awareness       100 ms         beliefs from measurements (heartbeats, acks,
+                                   noise, path loss, wind, cloud, GNSS check)
+    election        100 ms         a relay silent for 200 ms -> promote a scout
     traffic         100 ms         packets over the mesh; connectivity
     causal layer    100 ms         why is this link failing, do(Δz) tests
     GNN placement   500 ms         where the relays should be
@@ -60,6 +62,7 @@ from scm.causal_layer import CausalLayer
 from mesh.mesh_network import MeshNetwork
 from mesh.routing import SCMAwareRouter
 from mesh.election import RelayElection
+from mesh.awareness import SwarmAwareness
 from mesh.interference import InterferenceResponse
 from mesh.roles import RoleManager
 from mesh.traffic import TrafficSimulator
@@ -108,8 +111,8 @@ class DemoController:
            "loss. The causal engine works out WHY each link is failing, scouts "
            "withdraw to regain the link, and survey data waits in custody "
            "until a route is back.",
-        3: "A relay UAV has failed. A scout is promoted into its slot within "
-           "100 ms, the mesh reroutes, and the role manager then settles the "
+        3: "A relay UAV has failed. Nobody hears its heartbeat, so within about "
+           "300 ms a scout is promoted into its slot, the mesh reroutes, and the role manager then settles the "
            "chain, launching a charged aircraft from the GCS if one is waiting.",
         4: "A new high-priority region has been reported. The swarm re-plans: "
            "the best-placed scout is pre-empted from lower-priority work, and "
@@ -194,12 +197,20 @@ class DemoController:
             dt=dt, realtime=False,
         )
 
+        # -- what the swarm knows ----------------------------------------------
+        # Everything the autonomy decides from comes through here, built from
+        # measurements only. It is never told about a disturbance.
+        self.awareness = SwarmAwareness(self.world, self.rf, log=self.sim.log_event)
+        self._read_anemometer()
+
         # -- energy, guidance ---------------------------------------------
-        self.energy = EnergyModel(self.world, wind=self.wind)
+        # Return times use the swarm's wind ESTIMATE, not the true field
+        self.energy = EnergyModel(self.world, wind=self.awareness)
         if self.scenario is not None:
             self.energy.config.recharge_s = self.scenario.recharge_s
         self.guidance = GuidanceLayer(self.world, energy=self.energy)
         self.guidance.mission_started = None          # PLANNING: nothing is tasked
+        self.guidance.awareness = self.awareness
         self.sim.guidance = self.guidance
 
         self.fleet_size = int(fleet_size or (self.scenario.fleet_size if self.scenario
@@ -213,6 +224,8 @@ class DemoController:
         # -- environmental injects ----------------------------------------------
         self.injects = MissionInjects(self.world, self.wind, self.rf, self.guidance,
                                       self.sim.log_event)
+        # The swarm's own GNSS check switches it to terrain-relative navigation
+        self.awareness.on_nav_fallback = lambda: setattr(self.injects, "nav_fallback", True)
         self.mission_phase = "PLANNING"      # PLANNING | LIVE | COMPLETE | ABORTED
         self.mission_id = None
         self.mission_started = None
@@ -313,10 +326,12 @@ class DemoController:
         self.mesh = MeshNetwork()
         self.router = SCMAwareRouter(route_update_interval=0.5)
         self.election = RelayElection()
+        self.election.awareness = self.awareness
         self.sim.mesh = self.mesh
         self.roles = RoleManager(self.world, self.guidance, self.rf, self.energy,
-                                 log=self.sim.log_event)
-        self.traffic = TrafficSimulator(self.world, gcs_id=self.world.gcs.id)
+                                 log=self.sim.log_event, awareness=self.awareness)
+        self.traffic = TrafficSimulator(self.world, gcs_id=self.world.gcs.id,
+                                        on_ack=self.awareness.on_ack)
 
         # -- mission: disturbances, scenario timeline, metrics -------------------
         self.disturbances = Disturbances(self)
@@ -509,13 +524,22 @@ class DemoController:
 
         if tick % 5 == 0:
             self._apply_environment()
+            # The swarm's beliefs, from this tick's measurements
+            self._read_anemometer()
+            self.awareness.update(self.sim.drones, now, self.dt * 5)
+            self.relay_optimizer.measured_noise_dbm = self.awareness.global_noise_dbm
+            self.relay_optimizer.link_offset_db = self.awareness.link_offset_db
+            self.relay_optimizer.ceiling_agl = self.awareness.ceiling_agl
+            self.causal_layer.weather_index = self.awareness.weather_index
+        if tick % 50 == 0:
+            self._reopen_lost_data(now)
 
         if tick % 10 == 0:
             self.ew.update(self.sim.drones, now)
 
-        # Relay failover — the fast path, every 100 ms. This interval IS the
-        # dominant term in self-healing latency; the election itself takes
-        # microseconds.
+        # Relay failover — the fast path, every 100 ms, on heartbeats (a relay
+        # nobody has heard for 200 ms). Detection is the dominant term in
+        # self-healing latency; the election itself takes microseconds.
         healed = False
         if tick % 5 == 0:
             self.election.relay_count = self.roles.relays_needed
@@ -668,10 +692,32 @@ class DemoController:
         power = self.injects.power_factor()
         for drone in self.sim.drones.values():
             drone.power_factor = power
-        # The causal engine gets weather as a regressor of its own, so it can
-        # separate rain-driven loss from terrain and interference instead of
-        # blaming whichever one moved last.
-        self.causal_layer.weather_index = self.injects.weather_index()
+        # (The causal engine's weather regressor comes from the swarm's own
+        # evidence — unexplained path loss and turbulence — in awareness.)
+
+    def _read_anemometer(self):
+        """
+        The GCS mast anemometer — a sensor: the wind at mast height (the wind
+        model's reference height) with 0.3 m/s of noise.
+        """
+        reading = np.asarray(self.wind.base_wind, dtype=float)[:2] + np.random.normal(0.0, 0.3, 2)
+        self.awareness.observe_anemometer(reading, height_m=float(self.world.gcs.mast_m))
+
+    def _reopen_lost_data(self, now: float):
+        """
+        GCS logic: a target was reported surveyed, its data has not all
+        arrived, and the aircraft carrying it has not been heard for
+        DATA_LOST_S — write the data off and fly the survey again.
+        """
+        for poi in self.world.pois:
+            if not poi.surveyed or poi.delivered or not poi.surveyed_by:
+                continue
+            carrier = poi.surveyed_by
+            if self.awareness.suspected(carrier, self.awareness.DATA_LOST_S):
+                self.traffic.reopen(poi.id, now, carrier,
+                                    f"{carrier} not heard for {self.awareness.heard_ago(carrier):.0f} s "
+                                    f"with {poi.data_chunks - self.traffic.delivered_chunks(poi.id)} "
+                                    "chunks outstanding")
 
     def summary(self, force: bool = False) -> dict:
         """The full metrics summary (cached for 2 s on the live path)."""
@@ -705,6 +751,7 @@ class DemoController:
                       "hidden": len(self.world.pois) - len(released)},
             "priority_score": (done / weight) if weight else None,
             "roles": self.roles.get_state(),
+            "awareness": self.awareness.get_state(),
             "disturbances": self.disturbances.get_state(),
             "inject_kinds": list(INJECT_KINDS),
             "disturbance_kinds": list(DISTURBANCE_KINDS),
@@ -965,6 +1012,7 @@ class DemoController:
             raise ValueError(f"{drone_id} is not ready on a pad")
         if not self.guidance.launch(drone, DroneRole[role.upper()], self.sim.sim_time, "operator"):
             raise ValueError(f"{drone_id} could not launch")
+        self.awareness.mark_launched(drone, self.sim.sim_time)
         return {"drone_id": drone_id}
 
     def _cmd_goto(self, drone_id: str, x: float, y: float):
@@ -1129,6 +1177,8 @@ class DemoController:
             self.disturbances.reset()
             self.roles.reset()
             self.traffic.reset()
+            self.awareness.reset()
+            self._read_anemometer()
             self.mission_metrics.reset()
             self.rf.extra_loss_db = 0.0
             self.mission_phase = "PLANNING"

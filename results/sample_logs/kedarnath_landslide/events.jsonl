@@ -1,4 +1,4 @@
-{"t": 0.0, "mission_t": 0.0, "type": "MISSION", "message": "UAVX-67611 LAUNCHED over Kedarnath \u2014 10 targets, 6 UAVs, 900 s allotted", "data": {"mission_id": "UAVX-67611"}}
+{"t": 0.0, "mission_t": 0.0, "type": "MISSION", "message": "UAVX-04721 LAUNCHED over Kedarnath \u2014 10 targets, 6 UAVs, 900 s allotted", "data": {"mission_id": "UAVX-04721"}}
 {"t": 0.02, "mission_t": 0.02, "type": "REALLOCATION", "message": "UAV-1: standby \u2192 relay \u2014 launched: chain needs 1 relay(s), 0 flying", "data": {"uav": "UAV-1", "from": "STANDBY", "to": "RELAY", "reason": "launched: chain needs 1 relay(s), 0 flying", "flap": false}}
 {"t": 0.02, "mission_t": 0.02, "type": "LAUNCH", "message": "UAV-1 launched as relay \u2014 chain needs 1 relay(s), 0 flying", "data": {"drone": "UAV-1", "role": "RELAY"}}
 {"t": 4.02, "mission_t": 4.02, "type": "REALLOCATION", "message": "UAV-2: standby \u2192 scout \u2014 launched: 10 target(s) waiting", "data": {"uav": "UAV-2", "from": "STANDBY", "to": "SCOUT", "reason": "launched: 10 target(s) waiting", "flap": false}}
@@ -39,8 +39,8 @@
 {"t": 121.7, "mission_t": 121.7, "type": "DATA_DELIVERED", "message": "POI-005 survey data complete at GCS (0.5 s after capture)", "data": {"poi": "POI-005"}}
 {"t": 148.02, "mission_t": 148.02, "type": "SITREP", "message": "SITREP-0003 generated in 0 ms from 4 cited detections", "data": {"sitrep_id": "SITREP-0003"}}
 {"t": 150.0, "mission_t": 150.0, "type": "KILL_NODE", "message": "UAV FAILURE: UAV-1 (relay) is down", "data": {"drone_id": "UAV-1"}}
-{"t": 150.0, "mission_t": 150.0, "type": "REALLOCATION", "message": "UAV-6: scout \u2192 relay \u2014 failover: promoted into a failed relay's slot", "data": {"uav": "UAV-6", "from": "SCOUT", "to": "RELAY", "reason": "failover: promoted into a failed relay's slot", "flap": false}}
-{"t": 150.0, "mission_t": 150.0, "type": "ELECTION", "message": "Failover in 0 ms end-to-end (detect + elect + reroute); promoted UAV-6 to relay", "data": {"latency_ms": 0.26991707272827625}}
+{"t": 150.2, "mission_t": 150.2, "type": "REALLOCATION", "message": "UAV-6: scout \u2192 relay \u2014 failover: promoted into a failed relay's slot", "data": {"uav": "UAV-6", "from": "SCOUT", "to": "RELAY", "reason": "failover: promoted into a failed relay's slot", "flap": false}}
+{"t": 150.2, "mission_t": 150.2, "type": "ELECTION", "message": "Failover in 200 ms end-to-end (detect + elect + reroute); promoted UAV-6 to relay", "data": {"latency_ms": 200.14945899612258}}
 {"t": 166.74, "mission_t": 166.74, "type": "SURVEY_COMPLETE", "message": "POI-007 (P2 landslide debris) surveyed by UAV-5", "data": {"drone": "UAV-5", "poi": "POI-007"}}
 {"t": 166.76, "mission_t": 166.76, "type": "TASKING", "message": "UAV-5 tasked to survey POI-006 (P3 flooded area)", "data": {"drone": "UAV-5", "poi": "POI-006"}}
 {"t": 166.82, "mission_t": 166.82, "type": "SURVEY_COMPLETE", "message": "POI-008 (P1 trapped survivors) surveyed by UAV-4", "data": {"drone": "UAV-4", "poi": "POI-008"}}
@@ -63,71 +63,80 @@
 {"t": 270.0, "mission_t": 270.0, "type": "PACKET_LOSS", "message": "30% packet loss on every link for 60 s", "data": {"node": "*"}}
 {"t": 270.0, "mission_t": 270.0, "type": "INTERVENTION_ARMED", "message": "INT-0001: link UAV-3<->UAV-6 degraded \u2014 baselining before do(dz=+15m)", "data": {"id": "INT-0001", "link": "UAV-3<->UAV-6"}}
 {"t": 271.3, "mission_t": 271.3, "type": "INTERVENTION_EXECUTED", "message": "INT-0001: executing do(dz=+15m) on UAV-6 \u2014 measuring causal effect on packet loss", "data": {"id": "INT-0001", "link": "UAV-3<->UAV-6"}}
-{"t": 274.9, "mission_t": 274.9, "type": "INTERVENTION_RESULT", "message": "INT-0001: Causal effect NOT identified \u2014 the no-confounding assumption failed this window. Treat the number as descriptive only. Reason: range changed 24% during the window (limit 8%)", "data": {"id": "INT-0001", "link": "UAV-3<->UAV-6", "attribution": "indeterminate", "confounded": true}}
+{"t": 274.9, "mission_t": 274.9, "type": "INTERVENTION_RESULT", "message": "INT-0001: Causal effect NOT identified \u2014 the no-confounding assumption failed this window. Treat the number as descriptive only. Reason: noise floor moved 4.0 dB during the window (limit 2.5 dB); range changed 24% during the window (limit 8%)", "data": {"id": "INT-0001", "link": "UAV-3<->UAV-6", "attribution": "indeterminate", "confounded": true}}
 {"t": 274.9, "mission_t": 274.9, "type": "INTERVENTION_ARMED", "message": "INT-0002: link UAV-4<->UAV-6 degraded \u2014 baselining before do(dz=+15m)", "data": {"id": "INT-0002", "link": "UAV-4<->UAV-6"}}
 {"t": 276.2, "mission_t": 276.2, "type": "INTERVENTION_EXECUTED", "message": "INT-0002: executing do(dz=+15m) on UAV-6 \u2014 measuring causal effect on packet loss", "data": {"id": "INT-0002", "link": "UAV-4<->UAV-6"}}
-{"t": 277.24, "mission_t": 277.24, "type": "RTH", "message": "UAV-3 (scout) returning to GCS \u2014 standing by: recharging for the next task", "data": {"drone": "UAV-3", "role": "SCOUT", "reason": "standing by: recharging for the next task"}}
-{"t": 281.1, "mission_t": 281.1, "type": "INTERVENTION_EXECUTED", "message": "INT-0002: executing do(dz=+30m) on UAV-6 \u2014 measuring causal effect on packet loss", "data": {"id": "INT-0002", "link": "UAV-4<->UAV-6"}}
+{"t": 279.8, "mission_t": 279.8, "type": "INTERVENTION_RESULT", "message": "INT-0002: Causal effect NOT identified \u2014 the no-confounding assumption failed this window. Treat the number as descriptive only. Reason: noise floor moved 3.7 dB during the window (limit 2.5 dB)", "data": {"id": "INT-0002", "link": "UAV-4<->UAV-6", "attribution": "indeterminate", "confounded": true}}
 {"t": 283.04, "mission_t": 283.04, "type": "SITREP", "message": "SITREP-0006 generated in 0 ms from 6 cited detections", "data": {"sitrep_id": "SITREP-0006"}}
-{"t": 286.0, "mission_t": 286.0, "type": "INTERVENTION_EXECUTED", "message": "INT-0002: executing do(dz=+60m) on UAV-6 \u2014 measuring causal effect on packet loss", "data": {"id": "INT-0002", "link": "UAV-4<->UAV-6"}}
-{"t": 289.6, "mission_t": 289.6, "type": "INTERVENTION_RESULT", "message": "INT-0002: Altitude change produced no effect separable from channel noise (t = 0.0), the map predicts little ridge loss and there is no interference \u2014 consistent with a range limit.", "data": {"id": "INT-0002", "link": "UAV-4<->UAV-6", "attribution": "not_terrain", "confounded": false}}
-{"t": 290.5, "mission_t": 290.5, "type": "RTH", "message": "UAV-4 (scout) returning to GCS \u2014 standing by: recharging for the next task", "data": {"drone": "UAV-4", "role": "SCOUT", "reason": "standing by: recharging for the next task"}}
+{"t": 287.0, "mission_t": 287.0, "type": "INTERVENTION_ARMED", "message": "INT-0003: link UAV-3<->UAV-6 degraded \u2014 baselining before do(dz=+15m)", "data": {"id": "INT-0003", "link": "UAV-3<->UAV-6"}}
+{"t": 288.3, "mission_t": 288.3, "type": "INTERVENTION_EXECUTED", "message": "INT-0003: executing do(dz=+15m) on UAV-6 \u2014 measuring causal effect on packet loss", "data": {"id": "INT-0003", "link": "UAV-3<->UAV-6"}}
+{"t": 291.9, "mission_t": 291.9, "type": "INTERVENTION_RESULT", "message": "INT-0003: Causal effect NOT identified \u2014 the no-confounding assumption failed this window. Treat the number as descriptive only. Reason: noise floor moved 4.0 dB during the window (limit 2.5 dB)", "data": {"id": "INT-0003", "link": "UAV-3<->UAV-6", "attribution": "indeterminate", "confounded": true}}
+{"t": 291.9, "mission_t": 291.9, "type": "INTERVENTION_ARMED", "message": "INT-0004: link UAV-4<->UAV-6 degraded \u2014 baselining before do(dz=+15m)", "data": {"id": "INT-0004", "link": "UAV-4<->UAV-6"}}
+{"t": 293.2, "mission_t": 293.2, "type": "INTERVENTION_EXECUTED", "message": "INT-0004: executing do(dz=+15m) on UAV-6 \u2014 measuring causal effect on packet loss", "data": {"id": "INT-0004", "link": "UAV-4<->UAV-6"}}
+{"t": 296.8, "mission_t": 296.8, "type": "INTERVENTION_RESULT", "message": "INT-0004: Causal effect NOT identified \u2014 the no-confounding assumption failed this window. Treat the number as descriptive only. Reason: noise floor moved 3.6 dB during the window (limit 2.5 dB); aircraft achieved only -1.1 m of the commanded +15 m", "data": {"id": "INT-0004", "link": "UAV-4<->UAV-6", "attribution": "indeterminate", "confounded": true}}
+{"t": 304.0, "mission_t": 304.0, "type": "INTERVENTION_ARMED", "message": "INT-0005: link UAV-3<->UAV-6 degraded \u2014 baselining before do(dz=+15m)", "data": {"id": "INT-0005", "link": "UAV-3<->UAV-6"}}
+{"t": 305.3, "mission_t": 305.3, "type": "INTERVENTION_EXECUTED", "message": "INT-0005: executing do(dz=+15m) on UAV-6 \u2014 measuring causal effect on packet loss", "data": {"id": "INT-0005", "link": "UAV-3<->UAV-6"}}
+{"t": 307.84, "mission_t": 307.84, "type": "RTH", "message": "UAV-3 (scout) returning to GCS \u2014 standing by: recharging for the next task", "data": {"drone": "UAV-3", "role": "SCOUT", "reason": "standing by: recharging for the next task"}}
+{"t": 325.18, "mission_t": 325.18, "type": "RTH", "message": "UAV-4 (scout) returning to GCS \u2014 standing by: recharging for the next task", "data": {"drone": "UAV-4", "role": "SCOUT", "reason": "standing by: recharging for the next task"}}
 {"t": 328.06, "mission_t": 328.06, "type": "SITREP", "message": "SITREP-0007 generated in 0 ms from 6 cited detections", "data": {"sitrep_id": "SITREP-0007"}}
 {"t": 330.0, "mission_t": 330.0, "type": "NEW_TASK", "message": "NEW PRIORITY-1 REGION REGION-1: 5 survey cells around (2711, 2540)", "data": {"region": "REGION-1"}}
-{"t": 330.0, "mission_t": 330.0, "type": "DIVERT", "message": "UAV-2 turned round on its way home for new work", "data": {"drone": "UAV-2"}}
-{"t": 330.0, "mission_t": 330.0, "type": "TASKING", "message": "UAV-2 tasked to survey POI-014 (P1 trapped survivors)", "data": {"drone": "UAV-2", "poi": "POI-014"}}
 {"t": 330.0, "mission_t": 330.0, "type": "DIVERT", "message": "UAV-4 turned round on its way home for new work", "data": {"drone": "UAV-4"}}
-{"t": 330.0, "mission_t": 330.0, "type": "TASKING", "message": "UAV-4 tasked to survey POI-013 (P1 trapped survivors)", "data": {"drone": "UAV-4", "poi": "POI-013"}}
+{"t": 330.0, "mission_t": 330.0, "type": "TASKING", "message": "UAV-4 tasked to survey POI-014 (P1 trapped survivors)", "data": {"drone": "UAV-4", "poi": "POI-014"}}
+{"t": 330.0, "mission_t": 330.0, "type": "DIVERT", "message": "UAV-2 turned round on its way home for new work", "data": {"drone": "UAV-2"}}
+{"t": 330.0, "mission_t": 330.0, "type": "TASKING", "message": "UAV-2 tasked to survey POI-013 (P1 trapped survivors)", "data": {"drone": "UAV-2", "poi": "POI-013"}}
 {"t": 330.0, "mission_t": 330.0, "type": "DIVERT", "message": "UAV-3 turned round on its way home for new work", "data": {"drone": "UAV-3"}}
 {"t": 330.0, "mission_t": 330.0, "type": "TASKING", "message": "UAV-3 tasked to survey POI-011 (P1 trapped survivors)", "data": {"drone": "UAV-3", "poi": "POI-011"}}
-{"t": 330.0, "mission_t": 330.0, "type": "INTERVENTION_ARMED", "message": "INT-0003: link UAV-2<->UAV-6 degraded \u2014 baselining before do(dz=+15m)", "data": {"id": "INT-0003", "link": "UAV-2<->UAV-6"}}
+{"t": 330.0, "mission_t": 330.0, "type": "DIVERT", "message": "UAV-5 turned round on its way home for new work", "data": {"drone": "UAV-5"}}
+{"t": 330.0, "mission_t": 330.0, "type": "TASKING", "message": "UAV-5 tasked to survey POI-012 (P1 trapped survivors)", "data": {"drone": "UAV-5", "poi": "POI-012"}}
+{"t": 330.0, "mission_t": 330.0, "type": "INTERVENTION_RESULT", "message": "INT-0005: Causal effect NOT identified \u2014 the no-confounding assumption failed this window. Treat the number as descriptive only. Reason: noise floor moved 3.9 dB during the window (limit 2.5 dB); range changed 17% during the window (limit 8%)", "data": {"id": "INT-0005", "link": "UAV-3<->UAV-6", "attribution": "indeterminate", "confounded": true}}
+{"t": 330.0, "mission_t": 330.0, "type": "INTERVENTION_ARMED", "message": "INT-0006: link UAV-4<->UAV-6 degraded \u2014 baselining before do(dz=+15m)", "data": {"id": "INT-0006", "link": "UAV-4<->UAV-6"}}
 {"t": 330.02, "mission_t": 330.02, "type": "COMM_RESTORED", "message": "Packet loss on every link cleared", "data": {}}
-{"t": 331.3, "mission_t": 331.3, "type": "INTERVENTION_EXECUTED", "message": "INT-0003: executing do(dz=+15m) on UAV-6 \u2014 measuring causal effect on packet loss", "data": {"id": "INT-0003", "link": "UAV-2<->UAV-6"}}
-{"t": 336.2, "mission_t": 336.2, "type": "INTERVENTION_EXECUTED", "message": "INT-0003: executing do(dz=+30m) on UAV-6 \u2014 measuring causal effect on packet loss", "data": {"id": "INT-0003", "link": "UAV-2<->UAV-6"}}
-{"t": 339.8, "mission_t": 339.8, "type": "INTERVENTION_RESULT", "message": "INT-0003: Causal effect NOT identified \u2014 the no-confounding assumption failed this window. Treat the number as descriptive only. Reason: range changed 26% during the window (limit 8%)", "data": {"id": "INT-0003", "link": "UAV-2<->UAV-6", "attribution": "indeterminate", "confounded": true}}
-{"t": 363.18, "mission_t": 363.18, "type": "SURVEY_COMPLETE", "message": "POI-014 (P1 trapped survivors) surveyed by UAV-2", "data": {"drone": "UAV-2", "poi": "POI-014"}}
-{"t": 363.2, "mission_t": 363.2, "type": "TASKING", "message": "UAV-2 tasked to survey POI-015 (P1 trapped survivors)", "data": {"drone": "UAV-2", "poi": "POI-015"}}
-{"t": 363.7, "mission_t": 363.7, "type": "DATA_DELIVERED", "message": "POI-014 survey data complete at GCS (0.5 s after capture)", "data": {"poi": "POI-014"}}
+{"t": 331.3, "mission_t": 331.3, "type": "INTERVENTION_EXECUTED", "message": "INT-0006: executing do(dz=+15m) on UAV-6 \u2014 measuring causal effect on packet loss", "data": {"id": "INT-0006", "link": "UAV-4<->UAV-6"}}
+{"t": 334.9, "mission_t": 334.9, "type": "INTERVENTION_RESULT", "message": "INT-0006: Causal effect NOT identified \u2014 the no-confounding assumption failed this window. Treat the number as descriptive only. Reason: noise floor moved 4.2 dB during the window (limit 2.5 dB); range changed 22% during the window (limit 8%); aircraft achieved only -0.2 m of the commanded +15 m", "data": {"id": "INT-0006", "link": "UAV-4<->UAV-6", "attribution": "indeterminate", "confounded": true}}
+{"t": 360.16, "mission_t": 360.16, "type": "SURVEY_COMPLETE", "message": "POI-014 (P1 trapped survivors) surveyed by UAV-4", "data": {"drone": "UAV-4", "poi": "POI-014"}}
+{"t": 360.18, "mission_t": 360.18, "type": "TASKING", "message": "UAV-4 tasked to survey POI-015 (P1 trapped survivors)", "data": {"drone": "UAV-4", "poi": "POI-015"}}
+{"t": 360.7, "mission_t": 360.7, "type": "DATA_DELIVERED", "message": "POI-014 survey data complete at GCS (0.5 s after capture)", "data": {"poi": "POI-014"}}
+{"t": 366.54, "mission_t": 366.54, "type": "SURVEY_COMPLETE", "message": "POI-013 (P1 trapped survivors) surveyed by UAV-2", "data": {"drone": "UAV-2", "poi": "POI-013"}}
+{"t": 367.1, "mission_t": 367.1, "type": "DATA_DELIVERED", "message": "POI-013 survey data complete at GCS (0.5 s after capture)", "data": {"poi": "POI-013"}}
 {"t": 373.08, "mission_t": 373.08, "type": "SITREP", "message": "SITREP-0008 generated in 0 ms from 6 cited detections", "data": {"sitrep_id": "SITREP-0008"}}
-{"t": 377.56, "mission_t": 377.56, "type": "SURVEY_COMPLETE", "message": "POI-015 (P1 trapped survivors) surveyed by UAV-2", "data": {"drone": "UAV-2", "poi": "POI-015"}}
-{"t": 377.58, "mission_t": 377.58, "type": "TASKING", "message": "UAV-2 tasked to survey POI-012 (P1 trapped survivors)", "data": {"drone": "UAV-2", "poi": "POI-012"}}
-{"t": 378.1, "mission_t": 378.1, "type": "DATA_DELIVERED", "message": "POI-015 survey data complete at GCS (0.5 s after capture)", "data": {"poi": "POI-015"}}
-{"t": 381.9, "mission_t": 381.9, "type": "SURVEY_COMPLETE", "message": "POI-013 (P1 trapped survivors) surveyed by UAV-4", "data": {"drone": "UAV-4", "poi": "POI-013"}}
-{"t": 382.5, "mission_t": 382.5, "type": "DATA_DELIVERED", "message": "POI-013 survey data complete at GCS (0.5 s after capture)", "data": {"poi": "POI-013"}}
-{"t": 391.38, "mission_t": 391.38, "type": "SURVEY_COMPLETE", "message": "POI-011 (P1 trapped survivors) surveyed by UAV-3", "data": {"drone": "UAV-3", "poi": "POI-011"}}
-{"t": 391.9, "mission_t": 391.9, "type": "DATA_DELIVERED", "message": "POI-011 survey data complete at GCS (0.5 s after capture)", "data": {"poi": "POI-011"}}
-{"t": 394.2, "mission_t": 394.2, "type": "SURVEY_COMPLETE", "message": "POI-012 (P1 trapped survivors) surveyed by UAV-2", "data": {"drone": "UAV-2", "poi": "POI-012"}}
-{"t": 394.8, "mission_t": 394.8, "type": "DATA_DELIVERED", "message": "POI-012 survey data complete at GCS (0.5 s after capture)", "data": {"poi": "POI-012"}}
-{"t": 395.56, "mission_t": 395.56, "type": "RTH", "message": "UAV-4 (scout) returning to GCS \u2014 no open targets", "data": {"drone": "UAV-4", "role": "SCOUT", "reason": "no open targets"}}
-{"t": 404.74, "mission_t": 404.74, "type": "RTH", "message": "UAV-3 (scout) returning to GCS \u2014 no open targets", "data": {"drone": "UAV-3", "role": "SCOUT", "reason": "no open targets"}}
-{"t": 407.8, "mission_t": 407.8, "type": "RTH", "message": "UAV-2 (scout) returning to GCS \u2014 no open targets", "data": {"drone": "UAV-2", "role": "SCOUT", "reason": "no open targets"}}
+{"t": 373.24, "mission_t": 373.24, "type": "SURVEY_COMPLETE", "message": "POI-011 (P1 trapped survivors) surveyed by UAV-3", "data": {"drone": "UAV-3", "poi": "POI-011"}}
+{"t": 373.8, "mission_t": 373.8, "type": "DATA_DELIVERED", "message": "POI-011 survey data complete at GCS (0.5 s after capture)", "data": {"poi": "POI-011"}}
+{"t": 375.16, "mission_t": 375.16, "type": "SURVEY_COMPLETE", "message": "POI-015 (P1 trapped survivors) surveyed by UAV-4", "data": {"drone": "UAV-4", "poi": "POI-015"}}
+{"t": 375.7, "mission_t": 375.7, "type": "DATA_DELIVERED", "message": "POI-015 survey data complete at GCS (0.5 s after capture)", "data": {"poi": "POI-015"}}
+{"t": 380.26, "mission_t": 380.26, "type": "RTH", "message": "UAV-2 (scout) returning to GCS \u2014 no open targets", "data": {"drone": "UAV-2", "role": "SCOUT", "reason": "no open targets"}}
+{"t": 386.38, "mission_t": 386.38, "type": "RTH", "message": "UAV-3 (scout) returning to GCS \u2014 no open targets", "data": {"drone": "UAV-3", "role": "SCOUT", "reason": "no open targets"}}
+{"t": 388.42, "mission_t": 388.42, "type": "RTH", "message": "UAV-4 (scout) returning to GCS \u2014 no open targets", "data": {"drone": "UAV-4", "role": "SCOUT", "reason": "no open targets"}}
 {"t": 418.1, "mission_t": 418.1, "type": "SITREP", "message": "SITREP-0009 generated in 0 ms from 6 cited detections", "data": {"sitrep_id": "SITREP-0009"}}
 {"t": 420.0, "mission_t": 420.0, "type": "JAMMING_START", "message": "COMM OUTAGE: source RFI-1 at (1793, 2718), 3 dBm", "data": {"jammer_id": "RFI-1"}}
 {"t": 420.2, "mission_t": 420.2, "type": "INTERFERENCE", "message": "Interference detected: noise floor up 15 dB at 1 aircraft (UAV-6). Geolocating the source.", "data": {}}
-{"t": 422.54, "mission_t": 422.54, "type": "LANDED", "message": "UAV-5 landed on its pad with 52% \u2014 battery swap started", "data": {"drone": "UAV-5", "battery": 51.756794107390185}}
+{"t": 427.46, "mission_t": 427.46, "type": "SURVEY_COMPLETE", "message": "POI-012 (P1 trapped survivors) surveyed by UAV-5", "data": {"drone": "UAV-5", "poi": "POI-012"}}
+{"t": 428.0, "mission_t": 428.0, "type": "DATA_DELIVERED", "message": "POI-012 survey data complete at GCS (0.5 s after capture)", "data": {"poi": "POI-012"}}
+{"t": 440.44, "mission_t": 440.44, "type": "RTH", "message": "UAV-5 (scout) returning to GCS \u2014 no open targets", "data": {"drone": "UAV-5", "role": "SCOUT", "reason": "no open targets"}}
 {"t": 463.12, "mission_t": 463.12, "type": "SITREP", "message": "SITREP-0010 generated in 0 ms from 6 cited detections", "data": {"sitrep_id": "SITREP-0010"}}
+{"t": 463.4, "mission_t": 463.4, "type": "INTERFERENCE", "message": "Source EMIT-1 cross-fixed from 4 aircraft bearings: grid (1767, 2769) \u00b1 30 m, \u2248-1 dBm. Relay planner now includes it in the link model.", "data": {"estimate": {"id": "EMIT-1", "x": 1766.9011063829787, "y": 2769.1138723404256, "z": 3298.8384655958466, "power_dbm": -1.2497561068563678, "radius_m": 30.445507081797135, "sensors": 4, "fixes": 3, "time": 463.3999999998685, "error_m": 57.40765010231946, "true_id": "RFI-1"}}}
 {"t": 465.02, "mission_t": 465.02, "type": "COMM_RESTORED", "message": "Interference source RFI-1 gone", "data": {"source": "RFI-1"}}
 {"t": 468.2, "mission_t": 468.2, "type": "INTERFERENCE", "message": "Interference has cleared \u2014 response stood down", "data": {}}
 {"t": 480.0, "mission_t": 480.0, "type": "FAULT", "message": "UAV-6 motor/battery fault \u2014 35% thrust authority lost, power draw doubled. Aircraft cannot hold station in gusts.", "data": {"drone_id": "UAV-6"}}
-{"t": 480.0, "mission_t": 480.0, "type": "RTH", "message": "UAV-6 (relay) returning to GCS \u2014 battery 48% at the 54% needed to get home", "data": {"drone": "UAV-6", "role": "RELAY", "reason": "battery 48% at the 54% needed to get home"}}
-{"t": 480.32, "mission_t": 480.32, "type": "READY", "message": "UAV-5 recharged and ready for launch", "data": {"drone": "UAV-5"}}
+{"t": 490.94, "mission_t": 490.94, "type": "RTH", "message": "UAV-6 (relay) returning to GCS \u2014 battery 45% at the 45% needed to get home", "data": {"drone": "UAV-6", "role": "RELAY", "reason": "battery 45% at the 45% needed to get home"}}
 {"t": 508.14, "mission_t": 508.14, "type": "SITREP", "message": "SITREP-0011 generated in 0 ms from 6 cited detections", "data": {"sitrep_id": "SITREP-0011"}}
 {"t": 540.0, "mission_t": 540.0, "type": "SCENARIO", "message": "Disturbance comm_outage at t=540 skipped: no airborne aircraft matching 'scout'", "data": {}}
 {"t": 553.16, "mission_t": 553.16, "type": "SITREP", "message": "SITREP-0012 generated in 0 ms from 6 cited detections", "data": {"sitrep_id": "SITREP-0012"}}
 {"t": 598.18, "mission_t": 598.18, "type": "SITREP", "message": "SITREP-0013 generated in 0 ms from 6 cited detections", "data": {"sitrep_id": "SITREP-0013"}}
 {"t": 600.0, "mission_t": 600.0, "type": "NEW_TASK", "message": "NEW PRIORITY-1 TASK POI-016 (trapped survivors) at (1585, 2693)", "data": {"poi": "POI-016"}}
-{"t": 642.04, "mission_t": 642.04, "type": "LANDED", "message": "UAV-4 landed on its pad with 27% \u2014 battery swap started", "data": {"drone": "UAV-4", "battery": 27.172766425523303}}
+{"t": 628.1, "mission_t": 628.1, "type": "LANDED", "message": "UAV-2 landed on its pad with 26% \u2014 battery swap started", "data": {"drone": "UAV-2", "battery": 26.190806088726703}}
+{"t": 630.28, "mission_t": 630.28, "type": "LANDED", "message": "UAV-3 landed on its pad with 27% \u2014 battery swap started", "data": {"drone": "UAV-3", "battery": 27.362259165107435}}
+{"t": 635.06, "mission_t": 635.06, "type": "LANDED", "message": "UAV-4 landed on its pad with 29% \u2014 battery swap started", "data": {"drone": "UAV-4", "battery": 28.92988793364504}}
 {"t": 643.2, "mission_t": 643.2, "type": "SITREP", "message": "SITREP-0014 generated in 0 ms from 6 cited detections", "data": {"sitrep_id": "SITREP-0014"}}
-{"t": 648.3, "mission_t": 648.3, "type": "LANDED", "message": "UAV-3 landed on its pad with 24% \u2014 battery swap started", "data": {"drone": "UAV-3", "battery": 24.489813403577937}}
-{"t": 659.86, "mission_t": 659.86, "type": "LANDED", "message": "UAV-2 landed on its pad with 22% \u2014 battery swap started", "data": {"drone": "UAV-2", "battery": 22.264276926286424}}
 {"t": 688.22, "mission_t": 688.22, "type": "SITREP", "message": "SITREP-0015 generated in 0 ms from 6 cited detections", "data": {"sitrep_id": "SITREP-0015"}}
-{"t": 704.4, "mission_t": 704.4, "type": "LANDED", "message": "UAV-6 landed on its pad with 14% \u2014 battery swap started", "data": {"drone": "UAV-6", "battery": 13.752579062650838}}
-{"t": 729.32, "mission_t": 729.32, "type": "READY", "message": "UAV-4 recharged and ready for launch", "data": {"drone": "UAV-4"}}
+{"t": 691.08, "mission_t": 691.08, "type": "LANDED", "message": "UAV-5 landed on its pad with 20% \u2014 battery swap started", "data": {"drone": "UAV-5", "battery": 19.750870592291527}}
+{"t": 713.48, "mission_t": 713.48, "type": "LANDED", "message": "UAV-6 landed on its pad with 11% \u2014 battery swap started", "data": {"drone": "UAV-6", "battery": 10.528194139162094}}
+{"t": 716.56, "mission_t": 716.56, "type": "READY", "message": "UAV-2 recharged and ready for launch", "data": {"drone": "UAV-2"}}
+{"t": 717.34, "mission_t": 717.34, "type": "READY", "message": "UAV-3 recharged and ready for launch", "data": {"drone": "UAV-3"}}
+{"t": 720.24, "mission_t": 720.24, "type": "READY", "message": "UAV-4 recharged and ready for launch", "data": {"drone": "UAV-4"}}
 {"t": 733.24, "mission_t": 733.24, "type": "SITREP", "message": "SITREP-0016 generated in 0 ms from 6 cited detections", "data": {"sitrep_id": "SITREP-0016"}}
-{"t": 738.8, "mission_t": 738.8, "type": "READY", "message": "UAV-3 recharged and ready for launch", "data": {"drone": "UAV-3"}}
-{"t": 753.04, "mission_t": 753.04, "type": "READY", "message": "UAV-2 recharged and ready for launch", "data": {"drone": "UAV-2"}}
 {"t": 778.26, "mission_t": 778.26, "type": "SITREP", "message": "SITREP-0017 generated in 0 ms from 6 cited detections", "data": {"sitrep_id": "SITREP-0017"}}
-{"t": 807.78, "mission_t": 807.78, "type": "READY", "message": "UAV-6 recharged and ready for launch", "data": {"drone": "UAV-6"}}
+{"t": 787.26, "mission_t": 787.26, "type": "READY", "message": "UAV-5 recharged and ready for launch", "data": {"drone": "UAV-5"}}
+{"t": 820.74, "mission_t": 820.74, "type": "READY", "message": "UAV-6 recharged and ready for launch", "data": {"drone": "UAV-6"}}
 {"t": 823.28, "mission_t": 823.28, "type": "SITREP", "message": "SITREP-0018 generated in 0 ms from 6 cited detections", "data": {"sitrep_id": "SITREP-0018"}}
 {"t": 868.3, "mission_t": 868.3, "type": "SITREP", "message": "SITREP-0019 generated in 0 ms from 6 cited detections", "data": {"sitrep_id": "SITREP-0019"}}
-{"t": 900.02, "mission_t": 900.02, "type": "MISSION", "message": "UAVX-67611 COMPLETE \u2014 allotted time reached. All aircraft recalled.", "data": {"mission_id": "UAVX-67611"}}
+{"t": 900.02, "mission_t": 900.02, "type": "MISSION", "message": "UAVX-04721 COMPLETE \u2014 allotted time reached. All aircraft recalled.", "data": {"mission_id": "UAVX-04721"}}

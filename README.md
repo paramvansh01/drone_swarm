@@ -15,11 +15,13 @@ It runs on real terrain at four Indian disaster sites and on a synthetic trainin
 | **Survey all assigned disaster locations** | A task is assigned only if the scout can reach it, survey it and get home within its battery and the mission clock. Assignment is greedy on priority-weight ÷ time. A task counts only when its data reaches the GCS. | `sim/guidance.py`, `sim/energy.py` | completion rate, completion time, priority-weighted score |
 | **Maintain end-to-end communication with the GCS** | The GCS is a fixed ground node. A terrain-aware relay chain is sized from the link budget over the real heightmap. A GNN places the relays. SCM-aware routing and packet-level store-and-forward carry the traffic. | `mesh/roles.py`, `gnn/`, `mesh/routing.py`, `mesh/traffic.py` | PDR, latency, connectivity availability, downtime |
 | **Dynamically assign relay UAVs** | Any UAV can fly any role. The role manager decides how many relays are needed each second and who flies them: a charged aircraft from the pads first, otherwise the scout doing the least valuable work. | `mesh/roles.py` | relay reallocations, reconfiguration efficiency |
-| **Reconfigure when comms degrade, UAVs fail or return to recharge** | A failed relay is replaced within 100 ms. A causal model diagnoses *why* a link degrades. Scouts withdraw from interference. A relay going home to recharge hands its station to a replacement *before* it leaves (make-before-break). There is a lost-link failsafe. | `mesh/election.py`, `scm/`, `mesh/interference.py`, `mesh/roles.py` | recovery time, performance after failures |
+| **Reconfigure when comms degrade, UAVs fail or return to recharge** | A relay that goes silent is replaced within about 300 ms (heartbeat detection plus failover). A causal model diagnoses *why* a link degrades. Scouts withdraw from interference. A relay going home to recharge hands its station to a replacement *before* it leaves (make-before-break). There is a lost-link failsafe. | `mesh/election.py`, `scm/`, `mesh/interference.py`, `mesh/roles.py` | recovery time, performance after failures |
 | **Prioritise newly emerging high-priority regions** | New tasks and regions are unknown until released. A P1 task pre-empts the best-placed scout on lower-priority work. Idle scouts wait mid-valley on standby. Scouts on a discretionary return are turned round. | `sim/guidance.py`, `mesh/roles.py` | emergent-task response time, priority-weighted score |
 | **Complete the mission safely and within the allotted time** | Energy-aware RTH (not a fixed %), wind-aware return times, landing reserve, polygon geofence on every setpoint, predictive separation assurance, sequenced take-offs, home before the deadline. | `sim/energy.py`, `sim/world.py`, `sim/deconfliction.py` | collisions, minimum separation, battery depleted, geofence violations |
 
-The architecture is described in **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
+**The swarm is never told about a disturbance.** An injected failure, outage, fault or weather change alters only the physics and the radio. The autonomy finds out the way a real swarm would. A relay nobody has heard for 200 ms is treated as failed; a drone whose radio dies looks exactly the same. A drone whose packets stop being acknowledged knows it has lost its link home. Interference is localised from measured noise floors and direction-finding bearings, and only that estimate is planned against. A battery fault shows up as extra current draw, the cloud base is found by flying into it, and GNSS drift is caught because radio ranging disagrees with it. `mesh/awareness.py` holds these beliefs, and `tests/test_awareness.py` audits the autonomy's source code for any read of simulator truth.
+
+The architecture, including a table of every disturbance and how it is detected, is in **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
 
 ---
 
@@ -28,8 +30,8 @@ The architecture is described in **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)*
 Python 3.10 or newer. No GPU needed.
 
 ```bash
-git clone https://github.com/paramvansh01/hackbattle_drone.git
-cd hackbattle_drone
+git clone https://github.com/paramvansh01/drone_swarm.git
+cd drone_swarm
 python3 -m venv .venv && source .venv/bin/activate      # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 ```
@@ -60,7 +62,7 @@ python run_scenario.py scenarios/stress_hidden_disturbances.json --strategy stat
 python -m bench.uavx_suite       # writes results/uavx_benchmarks.{json,md} and results/sample_logs/
 ```
 
-**Run the tests** (138 tests, about 2 minutes):
+**Run the tests** (158 tests, about 4 minutes):
 
 ```bash
 python -m pytest
@@ -131,44 +133,43 @@ Sample logs from one run of each scenario are in `results/sample_logs/`. A live 
 
 ## 6. Results
 
-Measured, not narrated: `python -m bench.uavx_suite` flies every shipped scenario with 3 seeds. It flies each one twice: once with the adaptive system, and once with a **fixed-role baseline**. The baseline keeps the same flight control, energy-aware RTH, geofence, relay placement network and packet model, but its roles are fixed at launch (one relay, the rest scouts). It has no failover promotion, no pre-emption, no handover, no standby, and no change in relay count. The difference between the two columns is what the adaptive autonomy is worth. Values are mean ± s.d. over all runs (12 per column), so the spread mostly reflects differences *between* scenarios. Seeds only vary fading and packet outcomes. Per-run values are in `results/uavx_benchmarks.json`, and full logs of one run per scenario are in `results/sample_logs/`.
+Measured, not narrated: `python -m bench.uavx_suite` flies every shipped scenario with 3 seeds. It flies each one twice: once with the adaptive system, and once with a **fixed-role baseline**. The baseline keeps the same flight control, energy-aware RTH, geofence, relay placement network and packet model, but its roles are fixed at launch (one relay, the rest scouts). It has no failover promotion, no pre-emption, no handover, no standby, and no change in relay count. The difference between the two columns is what the adaptive autonomy is worth. Values are mean ± s.d. over all runs (12 per column), so the spread mostly reflects differences *between* scenarios. Seeds vary radio fading, packet outcomes and, in the stress scenario, task placement. Per-run values are in `results/uavx_benchmarks.json`, and full logs of one run per scenario are in `results/sample_logs/`.
 
 | Metric | Adaptive (this system) | Fixed-role baseline |
 |---|---|---|
-| completion rate | 98.4 ± 2.7% | 87.3 ± 15.0% |
-| priority weighted score | 98.0 ± 3.4% | 83.3 ± 18.9% |
-| emergent response s | 42.6 ± 10.0 s | 156.3 ± 36.5 s |
-| packet delivery ratio | 96.7 ± 2.1% | 93.1 ± 4.7% |
-| latency ms mean | 9.1 ± 1.9 ms | 9.5 ± 2.3 ms |
-| connectivity availability | 95.3 ± 3.1% | 90.1 ± 6.3% |
-| downtime s total | 123.6 ± 81.3 s | 215.5 ± 138.8 s |
-| relay reallocations | 7.7 ± 1.2 | 7.0 ± 2.3 |
+| completion rate | 97.3 ± 3.2% | 87.8 ± 15.3% |
+| priority weighted score | 96.7 ± 3.9% | 84.0 ± 19.3% |
+| emergent response s | 42.0 ± 13.0 s | 179.7 ± 29.9 s |
+| packet delivery ratio | 96.7 ± 2.1% | 91.6 ± 5.5% |
+| latency ms mean | 9.1 ± 2.1 ms | 9.3 ± 2.1 ms |
+| connectivity availability | 95.3 ± 3.1% | 88.6 ± 7.2% |
+| downtime s total | 123.6 ± 79.3 s | 273.2 ± 182.9 s |
+| relay reallocations | 8.0 ± 1.9 | 6.9 ± 1.6 |
 | reconfiguration efficiency | 100.0 ± 0.0% | 100.0 ± 0.0% |
-| recovery time s mean | 6.8 ± 5.1 s | 10.8 ± 7.1 s |
-| post disruption availability | 93.8 ± 3.9% | 86.2 ± 8.5% |
-| post disruption pdr | 95.7 ± 2.7% | 90.3 ± 6.4% |
+| recovery time s mean | 6.7 ± 5.1 s | 13.4 ± 9.4 s |
+| post disruption availability | 93.9 ± 4.0% | 84.5 ± 9.4% |
+| post disruption pdr | 95.7 ± 2.7% | 88.6 ± 7.2% |
 | collisions | 0.0 ± 0.0 | 0.0 ± 0.0 |
-| min separation m | 21.8 ± 7.4 m | 18.9 ± 7.5 m |
+| min separation m | 17.1 ± 5.4 m | 19.0 ± 7.4 m |
 | geofence violations | 0.0 ± 0.0 | 0.0 ± 0.0 |
 | battery depleted | 0.0 ± 0.0 | 0.0 ± 0.0 |
-| min battery pct | 22.4 ± 5.3% | 34.0 ± 11.2% |
+| min battery pct | 21.3 ± 7.0% | 33.6 ± 11.6% |
 
-## Per scenario (adaptive)
-
-| Scenario | Completion | Priority-weighted | PDR | Availability | Recovery | Collisions | Min battery |
+| Scenario |Completion | Priority-weighted | PDR | Availability | Recovery | Collisions | Min battery |
 |---|---|---|---|---|---|---|---|
-| synthetic_quickstart | 100.0 ± 0.0% | 100.0 ± 0.0% | 95.6 ± 0.1% | 94.2 ± 0.1% | 5.3 ± 0.1 s | 0.0 ± 0.0 | 25.2 ± 0.1% |
-| kedarnath_landslide | 93.8 ± 0.0% | 92.1 ± 0.0% | 97.0 ± 0.0% | 95.5 ± 0.0% | 8.9 ± 0.0 s | 0.0 ± 0.0 | 13.5 ± 0.2% |
-| uttarkashi_earthquake | 100.0 ± 0.0% | 100.0 ± 0.0% | 99.9 ± 0.0% | 100.0 ± 0.0% | 0.0 ± 0.0 s | 0.0 ± 0.0 | 27.4 ± 0.1% |
-| stress_hidden_disturbances | 100.0 ± 0.0% | 100.0 ± 0.0% | 94.3 ± 0.6% | 91.3 ± 0.6% | 13.2 ± 3.1 s | 0.0 ± 0.0 | 23.4 ± 0.7% |
+| synthetic_quickstart | 100.0 ± 0.0% | 100.0 ± 0.0% | 95.4 ± 0.1% | 93.9 ± 0.0% | 4.6 ± 0.1 s | 0.0 ± 0.0 | 24.1 ± 0.4% |
+| kedarnath_landslide | 93.8 ± 0.0% | 92.1 ± 0.0% | 97.2 ± 0.0% | 95.8 ± 0.0% | 8.9 ± 0.0 s | 0.0 ± 0.0 | 10.5 ± 0.2% |
+| uttarkashi_earthquake | 100.0 ± 0.0% | 100.0 ± 0.0% | 100.0 ± 0.0% | 100.0 ± 0.0% | 0.0 ± 0.0 s | 0.0 ± 0.0 | 29.4 ± 0.8% |
+| stress_hidden_disturbances | 95.6 ± 3.1% | 94.6 ± 3.8% | 94.3 ± 0.2% | 91.5 ± 0.7% | 13.3 ± 2.9 s | 0.0 ± 0.0 | 21.3 ± 2.1% |
 
 What the numbers say:
 
-- **Priority handling is where adaptation pays most.** New emergencies reach the GCS in about 43 s, against about 156 s when they have to wait for a free scout.
-- **Completion and priority-weighted score** are 98% against 83–87%. The only miss is in Kedarnath: a P1 report arriving at T+600 s. It needed a 314 s round trip with 300 s left, and the planner holds every aircraft to being on its pad by the deadline, so it declined. Relaxing that rule (survey before the deadline, land after it) is a one-line policy change; we kept the stricter reading of "complete the mission safely and within the allotted time".
-- **Communication** is better throughout: higher PDR and availability, 40% less downtime, and faster recovery after disruptions, because the chain is re-sized and re-staffed instead of left as it was launched.
-- **Uttarkashi is a draw.** The Bhagirathi valley there is straight and open, one relay covers everything, and there is little for adaptation to win. That is expected.
-- **Safety:** no collisions, geofence violations or flat batteries in any run. The adaptive system flies its batteries harder (minimum 22% against 34%) because it keeps aircraft working longer, but always above the 8% landing reserve.
+- **These are measured with the swarm learning about every disturbance itself.** Failures come from missing heartbeats, faults from battery current, interference from noise readings and DF bearings, wind from its own estimators. None of it is told to the swarm.
+- **Priority handling is where adaptation pays most.** New emergencies reach the GCS in about 42 s, against about 180 s when they have to wait for a free scout.
+- **Completion and priority-weighted score** are about 97% against 84–88%. The misses are Kedarnath's P1 report at T+600 s, whose round trip does not fit the 300 s left (the planner holds every aircraft to being on its pad by the deadline), and one task in two of the three stress-scenario seeds.
+- **Communication** is better throughout: higher PDR and availability, less than half the downtime, and recovery twice as fast after disruptions, because the chain is re-sized and re-staffed instead of left as it was launched.
+- **Uttarkashi is a draw.** The valley there is straight and open, one relay covers everything, and there is little for adaptation to win.
+- **Safety:** no collisions, geofence violations or flat batteries in any run. The adaptive system flies its batteries harder (minimum 21% against 34%, and 10.5% in Kedarnath) because it keeps aircraft working longer, but always above the 8% landing reserve.
 
 ---
 
@@ -203,7 +204,8 @@ sim/       world.py        terrain + GCS + geofence + tasks; knife-edge RF obstr
            physics.py, wind.py, rf_channel.py, terrain.py, injects.py, runner.py (50 Hz loop)
 mesh/      roles.py        relay requirement from terrain, who flies what, handover, launches, standby
            traffic.py      packet-level telemetry/survey traffic, store-and-forward, comms metrics
-           election.py     100 ms relay failover        routing.py  SCM-aware routing incl. GCS
+           awareness.py    what the swarm believes, from measurements only (heartbeats, acks, noise, ...)
+           election.py     heartbeat-based relay failover    routing.py  SCM-aware routing incl. GCS
            interference.py detect/localise interference, withdraw scouts, hold dead-zone targets
 gnn/       E(3)-equivariant relay placement + differentiable terrain link budget
 scm/       structural causal model of link loss + do(Δz) altitude interventions
@@ -247,7 +249,7 @@ These are logged results from `python -m bench.run_benchmarks`, in `models/bench
 - **Deterministic scenarios.** Seeds vary radio fading, packet outcomes and (in the stress scenario) task placement. Disturbance timelines are fixed per scenario, so the spread across seeds is small. Hidden Stage 2 scenarios are the real test.
 - **Standby costs energy.** Idle scouts loitering for new emergencies arrive faster but burn hover power. The policy stands them by only while they could still reach the far end of the area.
 - **Simulated detections.** Detections and SITREPs are generated from task categories, not from imagery (no YOLO or LLM in the loop). SITREPs come from a template that cannot hallucinate.
-- **The planner is conservative.** It uses a 1.2 safety factor, an 8% landing reserve, and every aircraft home by the deadline. A task at the edge of the energy or time envelope is declined rather than risked. In the shipped scenarios this cost one late emergency report, and never an aircraft.
+- **The planner is conservative.** It uses a 1.2 safety factor, an 8% landing reserve, and every aircraft home by the deadline. A task at the edge of the energy or time envelope is declined rather than risked. In the shipped scenarios this costs a late emergency report in Kedarnath and an occasional task in the stress scenario, and never an aircraft.
 
 ## 10. Troubleshooting
 

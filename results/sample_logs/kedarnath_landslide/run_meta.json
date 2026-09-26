@@ -159,10 +159,10 @@
       }
     ]
   },
-  "code_version": "c5aa68b",
+  "code_version": "96e3112",
   "python": "3.13.7",
   "platform": "macOS-15.5-arm64-arm-64bit-Mach-O",
-  "wall_clock_s": 161.4,
+  "wall_clock_s": 203.9,
   "sim_dt_s": 0.02,
   "controller": "Cascaded PID"
 }

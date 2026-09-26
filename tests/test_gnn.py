@@ -242,7 +242,13 @@ def test_build_node_features_excludes_dead_nodes():
         "RELAY-1": Drone("RELAY-1", np.array([900.0, 2200.0, 850.0]), DroneRole.RELAY),
         "SCOUT-1": Drone("SCOUT-1", np.array([1400.0, 2200.0, 820.0]), DroneRole.SCOUT),
     }
+    # Live aircraft are the ones with measured links; the failed one has none
+    drones["GCS-RELAY"].neighbors = {"SCOUT-1": 0.9, "RELAY-1": 0.9}
+    drones["SCOUT-1"].neighbors = {"GCS-RELAY": 0.9, "RELAY-1": 0.9}
+    drones["RELAY-1"].neighbors = {"GCS-RELAY": 0.9, "SCOUT-1": 0.9}
     drones["RELAY-1"].kill()
+    for d in drones.values():
+        d.neighbors.pop("RELAY-1", None)
 
     positions, features, movable, ids = build_node_features(drones, world)
 
@@ -264,6 +270,8 @@ def test_build_node_features_marks_only_relays_movable():
         "RELAY-1": Drone("RELAY-1", np.array([900.0, 2200.0, 850.0]), DroneRole.RELAY),
         "SCOUT-1": Drone("SCOUT-1", np.array([1400.0, 2200.0, 820.0]), DroneRole.SCOUT),
     }
+    for d in drones.values():
+        d.neighbors = {o: 0.9 for o in drones if o != d.id}
     _, _, movable, ids = build_node_features(drones, world)
 
     mapping = dict(zip(ids, movable.tolist()))

@@ -73,6 +73,8 @@ class SimulationRunner:
         self.realtime = realtime
 
         self.physics = FlightDynamics()
+        from .df_sensor import DirectionFinder
+        self.df_sensor = DirectionFinder(world, rf_channel)
         self.drones: Dict[str, Drone] = {}
         self.sim_time = 0.0
         self.tick_count = 0
@@ -276,16 +278,22 @@ class SimulationRunner:
         for d in self.drones.values():
             d.neighbors.clear()
             d.sensors.rssi.clear()
+            d.sensors.ranges.clear()
+            d.sensors.gcs_range = None
             d.gcs_link = 0.0
 
-        # Noise floor at each receiver. Constant unless positional
-        # interference sources exist, in which case it depends on where each
-        # aircraft is and what terrain lies between it and each source.
+        # Noise floor at each receiver (physics): the area-wide floor plus any
+        # interference source, attenuated by the terrain between them. Each
+        # aircraft's radio *measures* it (1 dB error) — the only way the
+        # autonomy learns about interference.
         noise = {}
         for d in radios:
-            noise[d.id] = (self.rf.noise_at(d.position, self.world)
-                           if self.rf.jammers else None)
-        self.rf.node_noise = {k: v for k, v in noise.items() if v is not None}
+            noise[d.id] = self.rf.noise_at(d.position, self.world)
+            d.sensors.noise_dbm = float(noise[d.id] + self._rng.normal(0.0, 1.0))
+        for d in self.drones.values():
+            if d not in radios:
+                d.sensors.noise_dbm = None
+        self.rf.node_noise = dict(noise)
 
         # Each unordered pair once — the channel is reciprocal, and computing
         # it twice would also draw two independent fading samples for what is
@@ -298,9 +306,7 @@ class SimulationRunner:
                               d2.get_antenna_pose_factor(d1.position))
 
                 # A link is only as good as its worse end
-                link_noise = None
-                if noise[d1.id] is not None:
-                    link_noise = max(noise[d1.id], noise[d2.id])
+                link_noise = max(noise[d1.id], noise[d2.id])
 
                 link = self.rf.compute_link_quality(
                     tx_power_dbm=d2.config.tx_power_dbm,
@@ -319,19 +325,21 @@ class SimulationRunner:
                 d2.neighbors[d1.id] = quality
                 d1.sensors.rssi[d2.id] = rssi
                 d2.sensors.rssi[d1.id] = rssi
+                # Two-way ranging rides on any usable link (2 m error)
+                if quality > 0.3:
+                    ranged = distance + float(self._rng.normal(0.0, 2.0))
+                    d1.sensors.ranges[d2.id] = ranged
+                    d2.sensors.ranges[d1.id] = ranged
 
         # Links to the ground station. Same radio as the aircraft, on a mast.
         gcs = getattr(self.world, "gcs", None)
         if gcs is None:
             return
-        gcs_noise = (self.rf.noise_at(gcs.position, self.world)
-                     if self.rf.jammers else None)
+        gcs_noise = self.rf.noise_at(gcs.position, self.world)
         for d in radios:
             distance = float(np.linalg.norm(d.position - gcs.position))
             occlusion = self.world.compute_rf_occlusion_db(d.position, gcs.position)
-            link_noise = None
-            if noise[d.id] is not None:
-                link_noise = max(noise[d.id], gcs_noise)
+            link_noise = max(noise[d.id], gcs_noise)
             link = self.rf.compute_link_quality(
                 tx_power_dbm=d.config.tx_power_dbm,
                 tx_gain_dbi=d.config.antenna_gain_dbi,
@@ -343,6 +351,8 @@ class SimulationRunner:
             )
             d.gcs_link = link["link_quality"] * self._link_factor(d.id, gcs.id)
             d.sensors.rssi[gcs.id] = link["rssi_dbm"]
+            d.sensors.gcs_range = (distance + float(self._rng.normal(0.0, 2.0))
+                                   if d.gcs_link > 0.3 else None)
 
     # -- metrics ------------------------------------------------------------
 
@@ -557,6 +567,9 @@ class SimulationRunner:
                 self._track_err_acc.append(drone.tracking_error)
 
             drone.update_sensors(wind_vel, self._rng, self.dt)
+            # Optical sensor: in cloud when above the (true) cloud base
+            ceiling = getattr(self.world, "ceiling_agl", None)
+            drone.sensors.in_cloud = bool(ceiling is not None and agl > ceiling)
             drone.update_battery(self.dt)
 
         if len(self._track_err_acc) > 600:
@@ -564,8 +577,10 @@ class SimulationRunner:
         if len(self._shadow_div_acc) > 600:
             self._shadow_div_acc = self._shadow_div_acc[-300:]
 
-        # 3. RF links
+        # 3. RF links (and each aircraft's radio measurements)
         self._update_rf_links()
+        if self.tick_count % 50 == 0:
+            self.df_sensor.read(self.drones)
 
         # 4. Relay topology optimisation (expensive — not every tick)
         if self.topology_optimizer and self.tick_count % 25 == 0:

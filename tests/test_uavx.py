@@ -234,7 +234,7 @@ def test_survey_data_waits_in_custody_and_is_offloaded_on_landing():
     assert poi.delivered and traffic.backlog("B") == 0
 
 
-def test_data_lost_with_its_carrier_reopens_the_target():
+def test_a_dead_carrier_drops_its_data_but_the_network_does_not_tell_anyone():
     world, drones = _two_hop_world()
     poi = world.add_poi("P", drones["B"].position[:2], priority=1)
     poi.surveyed, poi.surveyed_by = True, "B"
@@ -242,8 +242,10 @@ def test_data_lost_with_its_carrier_reopens_the_target():
     traffic.update(drones, _Router({}), 0.0, 0.1, {"A": (0.0, 0), "B": (0.0, 0)})
     drones["B"].kill(0.1)
     traffic.update(drones, _Router({}), 0.2, 0.1, {"A": (0.0, 0)})
-    assert not poi.surveyed and not poi.delivered
-    assert traffic.summary()["data_reopened"] == 1
+    # The chunks are physically gone, but the task is untouched: re-opening
+    # it is the GCS's decision, made from the carrier's silence
+    assert traffic.backlog("B") == 0 and traffic.dropped["survey"] == poi.data_chunks
+    assert poi.surveyed and not poi.delivered
 
 
 # --- priorities -----------------------------------------------------------------

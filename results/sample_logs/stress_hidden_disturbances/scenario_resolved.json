@@ -409,12 +409,12 @@
       "priority": 2,
       "surveyed": true,
       "surveyed_by": "UAV-2",
-      "surveyed_at": 181.88000000001924,
+      "surveyed_at": 205.98000000003157,
       "release_time": 0.0,
       "emergent": false,
       "region": null,
       "delivered": true,
-      "delivered_at": 206.01120000003158
+      "delivered_at": 206.51120000003183
     },
     {
       "id": "POI-008",
@@ -463,12 +463,12 @@
       "priority": 1,
       "surveyed": true,
       "surveyed_by": "UAV-2",
-      "surveyed_at": 421.2799999999068,
+      "surveyed_at": 422.4799999999057,
       "release_time": 379.99999999994435,
       "emergent": true,
       "region": "REGION-1",
       "delivered": true,
-      "delivered_at": 421.8111999999063
+      "delivered_at": 423.0111999999052
     },
     {
       "id": "POI-011",
@@ -481,12 +481,12 @@
       "priority": 1,
       "surveyed": true,
       "surveyed_by": "UAV-3",
-      "surveyed_at": 425.63999999990284,
+      "surveyed_at": 423.259999999905,
       "release_time": 379.99999999994435,
       "emergent": true,
       "region": "REGION-1",
       "delivered": true,
-      "delivered_at": 426.2111999999023
+      "delivered_at": 423.8111999999045
     },
     {
       "id": "POI-012",
@@ -499,12 +499,12 @@
       "priority": 1,
       "surveyed": true,
       "surveyed_by": "UAV-2",
-      "surveyed_at": 406.07999999992063,
+      "surveyed_at": 407.2399999999196,
       "release_time": 379.99999999994435,
       "emergent": true,
       "region": "REGION-1",
       "delivered": true,
-      "delivered_at": 406.61119999992013
+      "delivered_at": 407.81119999991904
     },
     {
       "id": "POI-013",
@@ -535,12 +535,12 @@
       "priority": 1,
       "surveyed": true,
       "surveyed_by": "UAV-2",
-      "surveyed_at": 436.5599999998929,
+      "surveyed_at": 437.73999999989184,
       "release_time": 379.99999999994435,
       "emergent": true,
       "region": "REGION-1",
       "delivered": true,
-      "delivered_at": 437.1111999998924
+      "delivered_at": 438.3111999998913
     },
     {
       "id": "POI-015",
@@ -553,12 +553,12 @@
       "priority": 1,
       "surveyed": true,
       "surveyed_by": "UAV-3",
-      "surveyed_at": 723.5999999996319,
+      "surveyed_at": 720.5399999996347,
       "release_time": 599.9999999997443,
       "emergent": true,
       "region": null,
       "delivered": true,
-      "delivered_at": 724.2055999996313
+      "delivered_at": 721.1055999996341
     }
   ],
   "fleet": [

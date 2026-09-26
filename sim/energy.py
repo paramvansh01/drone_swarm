@@ -27,10 +27,12 @@ import numpy as np
 
 @dataclass
 class EnergyConfig:
-    # Ground speed = clip(airspeed + tailwind, min, max). Calibrated against
-    # logged flights: ~19 m/s downwind, ~10 m/s into a 6 m/s valley wind.
-    airspeed: float = 16.0
-    max_ground_speed: float = 18.5
+    # Ground speed = clip(airspeed + tailwind, min, max), with the wind the
+    # swarm estimates at cruise height. Calibrated against logged flights:
+    # ~19 m/s downwind, ~10 m/s into a valley wind of ~8.7 m/s at 110 m AGL
+    # (airspeed ~18.7 m/s; 18.5 keeps a margin).
+    airspeed: float = 18.5
+    max_ground_speed: float = 19.0
     min_ground_speed: float = 5.0
     path_factor: float = 1.15          # valley paths are longer than the straight line
     climb_descend_s: float = 25.0      # climb-out, descent and landing overhead per leg
@@ -49,17 +51,22 @@ class EnergyModel:
     def __init__(self, world, config: Optional[EnergyConfig] = None, wind=None):
         self.world = world
         self.config = config or EnergyConfig()
-        # The wind field, if known: return legs are usually into the valley
-        # wind, and that is where aircraft run out of battery.
+        # The swarm's wind ESTIMATE (anything with a `base_wind`), never the
+        # true field: return legs are usually into the valley wind, and that
+        # is where aircraft run out of battery.
         self.wind = wind
 
     # -- primitives ---------------------------------------------------------
 
     def drain_rate(self, drone, thrust_fraction: Optional[float] = None) -> float:
-        """Battery %/s at a representative thrust, including any fault or weather penalty."""
+        """
+        Battery %/s at a representative thrust, scaled by the aircraft's own
+        measured draw factor — so a fault or a wet airframe is planned for
+        once the battery monitor has seen it, without anyone announcing it.
+        """
         cfg = drone.config
         f = self.config.cruise_thrust_fraction if thrust_fraction is None else thrust_fraction
-        penalty = float(getattr(drone, "power_factor", 1.0)) * (2.0 - float(getattr(drone, "health", 1.0)))
+        penalty = max(float(getattr(drone, "drain_factor", 1.0)), 1.0)
         return penalty * (cfg.battery_drain_rate
                           + (cfg.battery_drain_rate_max - cfg.battery_drain_rate) * f)
 

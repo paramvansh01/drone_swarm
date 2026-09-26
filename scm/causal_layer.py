@@ -66,7 +66,8 @@ class CausalLayer:
         """
         from sim.drone import DroneRole
 
-        alive = [d for d in drones.values() if d.is_alive]
+        # Any aircraft with measured links (a silent one has none)
+        alive = [d for d in drones.values() if d.neighbors]
         links = []
 
         for i, d1 in enumerate(alive):
@@ -99,30 +100,28 @@ class CausalLayer:
         """Run one diagnostics + intervention tick."""
         results = []
 
-        noise_dbm = (rf_channel.jamming_power_dbm
-                     if rf_channel.jamming_active
-                     else rf_channel.noise_floor_dbm)
+        # The radio's datasheet floor, until a receiver reports otherwise
+        floor_dbm = float(getattr(rf_channel, "base_noise_floor", -100.0))
 
         candidates = self._relevant_links(drones)
 
-        # Evict links whose endpoints are no longer both alive. Without this a
-        # killed relay's last (healthy) links stayed in the table indefinitely
-        # and kept being shown to the operator as live links.
-        alive_ids = {d.id for d in drones.values() if d.is_alive}
+        # Evict links whose endpoints no longer have any measured link. Without
+        # this a failed relay's last (healthy) links stayed in the table
+        # indefinitely and kept being shown to the operator as live links.
+        alive_ids = {d.id for d in drones.values() if d.neighbors}
         for link_id in list(self.link_state):
             a, b = self.link_state[link_id]["nodes"]
             if a not in alive_ids or b not in alive_ids:
                 del self.link_state[link_id]
 
-        node_noise = getattr(rf_channel, "node_noise", None) or {}
-
         for _, d1, d2, quality, distance in candidates:
             link_id = self._link_id(d1.id, d2.id)
 
-            # With positional jammers the noise floor differs per aircraft;
-            # the link's J is the worse of its two receivers.
-            if d1.id in node_noise or d2.id in node_noise:
-                noise_dbm = max(node_noise.get(d1.id, -200.0), node_noise.get(d2.id, -200.0))
+            # J is what the two receivers MEASURE (their noise-floor readings);
+            # the link's J is the worse of the two.
+            readings = [x for x in (getattr(d1.sensors, "noise_dbm", None),
+                                    getattr(d2.sensors, "noise_dbm", None)) if x is not None]
+            noise_dbm = max(readings) if readings else floor_dbm
 
             occlusion = self.world.compute_rf_occlusion_db(d1.position, d2.position)
             antenna = d1.get_antenna_pose_factor(d2.position)

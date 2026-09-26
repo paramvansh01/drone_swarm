@@ -1,14 +1,14 @@
 {
   "summary": {
     "mission": {
-      "mission_time_s": 834.0,
+      "mission_time_s": 831.0,
       "time_limit_s": 900.0,
       "tasks_total": 15,
       "tasks_released": 15,
       "tasks_surveyed": 15,
       "tasks_delivered": 15,
       "completion_rate": 1.0,
-      "completion_time_s": 724.2,
+      "completion_time_s": 721.1,
       "priority_weighted_score": 1.0,
       "within_time_limit": true,
       "emergent_tasks": [
@@ -23,22 +23,22 @@
           "id": "POI-010",
           "priority": 1,
           "released_s": 379.99999999994435,
-          "surveyed_after_s": 41.279999999962456,
-          "delivered_after_s": 41.81119999996196
+          "surveyed_after_s": 42.479999999961365,
+          "delivered_after_s": 43.011199999960866
         },
         {
           "id": "POI-011",
           "priority": 1,
           "released_s": 379.99999999994435,
-          "surveyed_after_s": 45.63999999995849,
-          "delivered_after_s": 46.211199999957955
+          "surveyed_after_s": 43.259999999960655,
+          "delivered_after_s": 43.81119999996014
         },
         {
           "id": "POI-012",
           "priority": 1,
           "released_s": 379.99999999994435,
-          "surveyed_after_s": 26.07999999997628,
-          "delivered_after_s": 26.61119999997578
+          "surveyed_after_s": 27.239999999975225,
+          "delivered_after_s": 27.81119999997469
         },
         {
           "id": "POI-013",
@@ -51,18 +51,18 @@
           "id": "POI-014",
           "priority": 1,
           "released_s": 379.99999999994435,
-          "surveyed_after_s": 56.55999999994856,
-          "delivered_after_s": 57.11119999994804
+          "surveyed_after_s": 57.739999999947486,
+          "delivered_after_s": 58.31119999994695
         },
         {
           "id": "POI-015",
           "priority": 1,
           "released_s": 599.9999999997443,
-          "surveyed_after_s": 123.59999999988759,
-          "delivered_after_s": 124.205599999887
+          "surveyed_after_s": 120.53999999989037,
+          "delivered_after_s": 121.10559999988982
         }
       ],
-      "emergent_response_s_mean": 62.538971428522125,
+      "emergent_response_s_mean": 62.2675428570938,
       "uavs_on_pads": [
         "UAV-2",
         "UAV-3",
@@ -74,32 +74,32 @@
       ]
     },
     "communication": {
-      "packet_delivery_ratio": 0.9470066919877013,
-      "pdr_telemetry": 0.9452234062441578,
-      "pdr_survey_data": 1.0,
-      "latency_ms_mean": 11.60007911391225,
+      "packet_delivery_ratio": 0.9461802420083077,
+      "pdr_telemetry": 0.9464920486435922,
+      "pdr_survey_data": 0.9375,
+      "latency_ms_mean": 11.549120379510395,
       "latency_ms_p95": 11.20000000000232,
-      "survey_data_latency_s_mean": 1.8326666666673965,
-      "connectivity_availability": 0.916560747663542,
-      "all_uavs_connected_fraction": 0.8518655338012435,
-      "downtime_s_total": 223.2,
+      "survey_data_latency_s_mean": 0.2593672222221474,
+      "connectivity_availability": 0.9195062651954278,
+      "all_uavs_connected_fraction": 0.8520433284096379,
+      "downtime_s_total": 215.2,
       "downtime_s_longest": 75.0,
-      "outage_count": 14,
+      "outage_count": 21,
       "packets": {
         "generated": {
-          "telemetry": 5349,
-          "survey": 180
+          "telemetry": 5345,
+          "survey": 192
         },
         "delivered": {
-          "telemetry": 5056,
+          "telemetry": 5059,
           "survey": 180
         },
         "dropped": {
-          "telemetry": 293,
-          "survey": 0
+          "telemetry": 286,
+          "survey": 12
         }
       },
-      "survey_data_reopened": 0
+      "survey_data_reopened": 12
     },
     "autonomy": {
       "relay_reallocations": 8,
@@ -111,13 +111,13 @@
       "disruptions": 9,
       "disruptions_hitless": 6,
       "disruptions_unrecovered": 0,
-      "failover_ms_last": 0.10958302300423384,
-      "relay_solves": 761
+      "failover_ms_last": 300.12775009957693,
+      "relay_solves": 782
     },
     "robustness": {
       "after_first_disruption": {
-        "availability": 0.896989565056792,
-        "pdr": 0.9345397676496873
+        "availability": 0.9006145173959248,
+        "pdr": 0.9335414808206958
       },
       "per_disruption": [
         {
@@ -159,7 +159,7 @@
           "availability_before": 1.0,
           "availability_after": 0.8120833333333334,
           "pdr_before": 1.0,
-          "pdr_after": 0.8273809523809523
+          "pdr_after": 0.8081395348837209
         },
         {
           "kind": "comm_outage",
@@ -172,7 +172,7 @@
           "recovery_s": 0.0,
           "availability_before": 0.8121869782971619,
           "availability_after": 1.0,
-          "pdr_before": 0.827037773359841,
+          "pdr_before": 0.8077669902912621,
           "pdr_after": 1.0
         },
         {
@@ -186,9 +186,9 @@
           "hitless": false,
           "recovery_s": 75.0,
           "availability_before": 1.0,
-          "availability_after": 0.509567387687188,
+          "availability_after": 0.5424292845257903,
           "pdr_before": 1.0,
-          "pdr_after": 0.7941787941787942
+          "pdr_after": 0.8087318087318087
         },
         {
           "kind": "comm_outage",
@@ -199,10 +199,10 @@
           },
           "hitless": false,
           "recovery_s": 25.0,
-          "availability_before": 0.67625,
+          "availability_before": 0.7091666666666666,
           "availability_after": 0.5831946755407654,
-          "pdr_before": 0.9604166666666667,
-          "pdr_after": 0.6112266112266113
+          "pdr_before": 0.9770833333333333,
+          "pdr_after": 0.6091476091476091
         },
         {
           "kind": "link_failure",
@@ -257,14 +257,14 @@
       "geofence_violation_s": 0.0,
       "altitude_violations": 0,
       "battery_depleted": 0,
-      "min_battery_pct": 22.7,
-      "min_landing_battery_pct": 22.7,
+      "min_battery_pct": 22.8,
+      "min_landing_battery_pct": 22.8,
       "landings": 5
     }
   },
   "indicative_scores": {
     "mission_completion": 100.0,
-    "communication_resilience": 93.2,
+    "communication_resilience": 93.3,
     "relay_role_management": 62.1,
     "fault_recovery": 77.8,
     "safety": 100.0,

@@ -453,13 +453,13 @@
       "category": "collapsed_building",
       "priority": 3,
       "surveyed": true,
-      "surveyed_by": "UAV-4",
-      "surveyed_at": 241.8400000000499,
+      "surveyed_by": "UAV-5",
+      "surveyed_at": 220.96000000003923,
       "release_time": 0.0,
       "emergent": false,
       "region": null,
       "delivered": true,
-      "delivered_at": 242.4112000000502
+      "delivered_at": 221.5112000000395
     },
     {
       "id": "POI-010",
@@ -489,13 +489,13 @@
       "category": "trapped_survivors",
       "priority": 1,
       "surveyed": true,
-      "surveyed_by": "UAV-1",
-      "surveyed_at": 389.35999999993584,
+      "surveyed_by": "UAV-3",
+      "surveyed_at": 364.2199999999587,
       "release_time": 329.9999999999898,
       "emergent": true,
       "region": "REGION-1",
       "delivered": true,
-      "delivered_at": 389.90559999993536
+      "delivered_at": 364.8055999999582
     },
     {
       "id": "POI-012",
@@ -507,13 +507,13 @@
       "category": "trapped_survivors",
       "priority": 1,
       "surveyed": true,
-      "surveyed_by": "UAV-4",
-      "surveyed_at": 346.7199999999746,
+      "surveyed_by": "UAV-1",
+      "surveyed_at": 340.5599999999802,
       "release_time": 329.9999999999898,
       "emergent": true,
       "region": "REGION-1",
       "delivered": true,
-      "delivered_at": 347.3055999999741
+      "delivered_at": 341.10559999997975
     },
     {
       "id": "POI-013",
@@ -526,12 +526,12 @@
       "priority": 1,
       "surveyed": true,
       "surveyed_by": "UAV-5",
-      "surveyed_at": 362.51999999996025,
+      "surveyed_at": 340.07999999998066,
       "release_time": 329.9999999999898,
       "emergent": true,
       "region": "REGION-1",
       "delivered": true,
-      "delivered_at": 363.11169999995974
+      "delivered_at": 340.6055999999802
     },
     {
       "id": "POI-014",
@@ -543,13 +543,13 @@
       "category": "trapped_survivors",
       "priority": 1,
       "surveyed": true,
-      "surveyed_by": "UAV-3",
-      "surveyed_at": 366.9799999999562,
+      "surveyed_by": "UAV-4",
+      "surveyed_at": 359.67999999996283,
       "release_time": 329.9999999999898,
       "emergent": true,
       "region": "REGION-1",
       "delivered": true,
-      "delivered_at": 367.50559999995573
+      "delivered_at": 360.2055999999624
     },
     {
       "id": "POI-015",
@@ -561,13 +561,13 @@
       "category": "trapped_survivors",
       "priority": 1,
       "surveyed": true,
-      "surveyed_by": "UAV-4",
-      "surveyed_at": 364.1399999999588,
+      "surveyed_by": "UAV-5",
+      "surveyed_at": 358.1799999999642,
       "release_time": 329.9999999999898,
       "emergent": true,
       "region": "REGION-1",
       "delivered": true,
-      "delivered_at": 364.7055999999583
+      "delivered_at": 358.70559999996374
     }
   ],
   "fleet": [

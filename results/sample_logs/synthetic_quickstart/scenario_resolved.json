@@ -445,12 +445,12 @@
       "priority": 1,
       "surveyed": true,
       "surveyed_by": "UAV-3",
-      "surveyed_at": 331.73999999998824,
+      "surveyed_at": 335.9799999999844,
       "release_time": 300.0000000000171,
       "emergent": true,
       "region": null,
       "delivered": true,
-      "delivered_at": 332.3111999999877
+      "delivered_at": 336.5111999999839
     }
   ],
   "fleet": [

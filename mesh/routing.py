@@ -115,7 +115,12 @@ class SCMAwareRouter:
 
         self._last_update_time = sim_time
 
-        alive_ids = [d_id for d_id, d in drones.items() if d.is_alive]
+        # The routing graph is what the nodes measure: a node with no measured
+        # link (crashed, or its radio is out) is simply not in it
+        def heard(d):
+            return bool(d.neighbors) or float(getattr(d, "gcs_link", 0.0)) > 0.0
+
+        alive_ids = [d_id for d_id, d in drones.items() if heard(d)]
         if ground_id is not None:
             alive_ids.append(ground_id)
         n = len(alive_ids)
@@ -128,10 +133,10 @@ class SCMAwareRouter:
         adjacency: Dict[str, Dict[str, float]] = defaultdict(dict)
 
         for d_id, drone in drones.items():
-            if not drone.is_alive:
+            if not heard(drone):
                 continue
             for neighbor_id, quality in drone.neighbors.items():
-                if neighbor_id not in drones or not drones[neighbor_id].is_alive:
+                if neighbor_id not in drones or not heard(drones[neighbor_id]):
                     continue
                 link_id = f"{d_id}<->{neighbor_id}"
                 stability = self._link_stability.get(link_id, 0.8)

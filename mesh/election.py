@@ -91,7 +91,9 @@ class RelayElection:
         start = time.perf_counter()
         from sim.drone import DroneRole
 
-        alive = {d_id: d for d_id, d in drones.items() if d.is_alive}
+        # Candidates are the aircraft the swarm can still hear, not the ones
+        # the simulator knows to be flying
+        alive = {d_id: d for d_id, d in drones.items() if self._believed_up(drones, d)}
         if len(alive) < 2:
             return {"status": "insufficient_nodes", "elapsed_ms": 0}
 
@@ -143,38 +145,62 @@ class RelayElection:
                     elapsed_ms, gcs_now, result["relays"], promoted or "none")
         return result
 
+    # The awareness layer (heartbeats). Set by the mission controller; without
+    # it the election falls back to "does anyone measure a link to it now".
+    awareness = None
+
+    def _heard_now(self, drones: dict, drone) -> bool:
+        if float(getattr(drone, "gcs_link", 0.0)) > 0.05:
+            return True
+        return any(o is not drone and o.neighbors.get(drone.id, 0.0) > 0.05
+                   for o in drones.values())
+
+    def _believed_up(self, drones: dict, drone) -> bool:
+        if getattr(drone, "on_pad", False):
+            return False
+        if self.awareness is not None:
+            return self.awareness.believed_airborne(drone)
+        return self._heard_now(drones, drone)
+
     def check_and_heal(
         self,
         drones: dict,
         sim_time: float,
     ) -> Optional[Dict]:
         """
-        Run the election when a relay has failed since the last check.
+        Run the election when a relay has gone silent since the last check.
 
-        Only genuine failures trigger it. Relays leaving to recharge are
-        replaced by the role manager's make-before-break handover instead,
-        before they go.
+        Failure is detected the way a mesh detects it: the relay's heartbeat
+        stops — no other node, and not the GCS, measures a link to it for
+        HEARTBEAT_S. The election cannot tell a crashed relay from one whose
+        radio has died, and does not try: either way its slot is empty. A relay
+        that is heard again becomes a candidate for failure detection again.
+        Relays leaving to recharge are replaced by the role manager's
+        make-before-break handover instead, before they go.
         """
-        from sim.drone import DroneRole, DroneStatus
+        from sim.drone import DroneRole
 
-        killed_relays = [
-            d_id for d_id, d in drones.items()
-            if d.status == DroneStatus.KILLED and d.role in (DroneRole.RELAY, DroneRole.GCS_RELAY)
-        ]
-
-        # Only heal failures we have not already healed. `killed_relays` is a
-        # standing condition — a dead node stays dead — so re-running the
-        # election on it every check re-elected the same replacement several
-        # times a second and buried the operator's event log.
         if not hasattr(self, "_handled_failures"):
             self._handled_failures = set()
 
-        new_failures = [d for d in killed_relays if d not in self._handled_failures]
+        silent = []
+        for d_id, d in drones.items():
+            if d.role not in (DroneRole.RELAY, DroneRole.GCS_RELAY) or getattr(d, "on_pad", False):
+                continue
+            if self._believed_up(drones, d):
+                self._handled_failures.discard(d_id)      # heard again: re-arm
+            else:
+                silent.append(d_id)
+
+        # Only heal failures we have not already healed: a silent node stays
+        # silent, and re-electing for it every check would bury the log
+        new_failures = [d for d in silent if d not in self._handled_failures]
         if not new_failures:
             return None
 
-        logger.warning("Self-healing triggered: new relay failures=%s", new_failures)
+        logger.warning("Self-healing triggered: relays silent=%s", new_failures)
         self._handled_failures.update(new_failures)
+        self._last_failures = new_failures
         return self.run_election(drones, sim_time, force=True)
 
     def record_heal_latency(self, drones: dict, sim_time: float,
@@ -188,9 +214,16 @@ class RelayElection:
         compute alone is microseconds and would make any system look
         instant; the detection delay is where the time goes.
         """
-        failed_at = [d.killed_at for d in drones.values()
-                     if getattr(d, "killed_at", None) is not None]
-        detection_ms = (sim_time - max(failed_at)) * 1000.0 if failed_at else 0.0
+        # Measurement only (for the metric, never for the decision): how long
+        # after the relay actually went silent the swarm acted
+        failed = [drones[d] for d in getattr(self, "_last_failures", []) if d in drones]
+        failed_at = [d.killed_at for d in failed if getattr(d, "killed_at", None) is not None]  # eval-only
+        if failed_at:
+            detection_ms = (sim_time - max(failed_at)) * 1000.0
+        elif self.awareness is not None and failed:
+            detection_ms = max(self.awareness.heard_ago(d.id) for d in failed) * 1000.0
+        else:
+            detection_ms = 0.0
 
         latency = max(detection_ms, 0.0) + self._last_election_duration_ms + extra_ms
         self._last_heal_latency_ms = latency

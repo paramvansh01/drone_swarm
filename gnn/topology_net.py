@@ -238,9 +238,9 @@ def build_node_features(
     """
     Build (positions, features, movable_mask, ids) from live drone state.
 
-    Only live aircraft are included — a killed node is not part of the mesh,
-    and including it would let the optimiser plan routes through a drone that
-    has fallen out of the sky.
+    Only aircraft with measured links are included — a node nobody can hear
+    is not part of the mesh, and including it would let the optimiser plan
+    routes through a drone that has fallen out of the sky.
 
     When `world` carries a ground station, it is appended as a fixed node with
     the ground-station flag set: the anchor every relay chain must reach.
@@ -249,8 +249,13 @@ def build_node_features(
 
     ids, positions, features, movable = [], [], [], []
 
+    def heard(d):
+        # Planned from measurements: an aircraft nobody can hear (crashed, or
+        # radio out) has no links and is not part of the mesh being planned
+        return bool(d.neighbors) or float(getattr(d, "gcs_link", 0.0)) > 0.0
+
     for d_id, drone in drones.items():
-        if not drone.is_alive:
+        if not heard(drone):
             continue
 
         ids.append(d_id)
@@ -279,7 +284,7 @@ def build_node_features(
 
     gcs = getattr(world, "gcs", None) if world is not None else None
     if gcs is not None:
-        links = [float(getattr(d, "gcs_link", 0.0)) for d in drones.values() if d.is_alive] or [0.0]
+        links = [float(getattr(d, "gcs_link", 0.0)) for d in drones.values() if heard(d)] or [0.0]
         ids.append(gcs.id)
         positions.append(np.asarray(gcs.position, dtype=float).tolist())
         features.append([

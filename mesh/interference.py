@@ -33,9 +33,10 @@ every link simply degrades. This module closes that loop.
                - The GCS gets the estimated position so a ground team can
                  find and switch off the source.
 
-Nothing here reads the true source position: the only input is each
-aircraft's measured noise floor (with 1 dB of measurement noise), so the
-estimate's error against ground truth is a genuine measurement.
+Nothing here reads the true source position: the only inputs are each
+aircraft's measured noise floor (1 dB measurement error) and its
+direction-finding array's bearings (sim/df_sensor.py), so the estimate's
+error against ground truth is a genuine measurement.
 """
 
 from __future__ import annotations
@@ -103,21 +104,22 @@ class InterferenceResponse:
         self.df_reports = []                   # (drone, bearing, dBm) this fix
         self.rf.ew_estimate = None
         self.rf.ew_emitters = []
+        self._now = 0.0
         self._publish()
 
     # -- per-tick ------------------------------------------------------------
 
     def update(self, drones: dict, sim_time: float):
-        floor = self.rf.noise_floor_dbm
-        alive = [d for d in drones.values() if d.is_alive]
+        self._now = sim_time
+        # The radio's datasheet thermal floor: the reference a rise is measured against
+        floor = float(self.rf.base_noise_floor)
+        # Aircraft whose receiver readings are coming in (a silent one reports nothing)
+        alive = [d for d in drones.values() if getattr(d.sensors, "noise_dbm", None) is not None]
 
-        # Measurement: the noise floor each receiver actually sees. Only
-        # positional jammers are handled here; the scripted scenario's
-        # area-wide noise has no source to locate.
-        self.measurements = {
-            d.id: float(self.rf.node_noise.get(d.id, floor) + self.rng.normal(0.0, 1.0))
-            for d in alive
-        }
+        # Measurement: the noise floor each receiver reports. An area-wide
+        # rise shows up at every aircraft and has no bearing to cross-fix;
+        # a local source shows up at some and is localised below.
+        self.measurements = {d.id: float(d.sensors.noise_dbm) for d in alive}
         self.jammed_nodes = [i for i, m in self.measurements.items()
                              if m - floor > self.DETECT_DB]
 
@@ -203,48 +205,14 @@ class InterferenceResponse:
 
     def _bearings(self, alive, floor):
         """
-        What each aircraft's direction-finding array reports this second.
-
-        A small DF array gives the bearing to an emitter, with an error that
-        grows as the signal weakens. Two emitters closer together than the
-        array can resolve are reported as one bearing between them — the same
-        limitation a real array has.
-
-        Returns a list of (sensor_index, bearing_rad, rx_dbm, sigma_rad).
+        What each aircraft's direction-finding array reported this second
+        (sim/df_sensor.py models the array). Returns a list of
+        (sensor_index, bearing_rad, rx_dbm, sigma_rad).
         """
         out = []
         for index, drone in enumerate(alive):
-            seen = []
-            for jammer in self.rf.jammers.values():
-                j = np.asarray(jammer["position"], dtype=float)
-                rel = j - drone.position
-                d3 = max(float(np.linalg.norm(rel)), 5.0)
-                fspl = 20 * np.log10(d3) + self.fspl_const
-                rx = (jammer["power_dbm"] + 3.0 - fspl
-                      - self.world.compute_rf_occlusion_db(j, drone.position))
-                if rx - floor < self.DETECT_DB:
-                    continue                      # too weak for the array
-                seen.append([float(np.arctan2(rel[1], rel[0])), rx])
-            if not seen:
-                continue
-            # Merge emitters the array cannot resolve in angle
-            seen.sort(key=lambda b: b[0])
-            merged = []
-            for bearing, rx in seen:
-                if merged and abs(self._wrap(bearing - merged[-1][0])) < self.DF_RESOLUTION:
-                    w0, w1 = 10 ** (merged[-1][1] / 10), 10 ** (rx / 10)
-                    merged[-1][0] += self._wrap(bearing - merged[-1][0]) * w1 / (w0 + w1)
-                    merged[-1][1] = 10 * np.log10(w0 + w1)
-                else:
-                    merged.append([bearing, rx])
-            for bearing, rx in merged:
-                snr = rx - floor
-                sigma = np.radians(float(np.clip(self.DF_SIGMA_DEG * 20.0 / max(snr, 4.0),
-                                                 self.DF_SIGMA_DEG, 12.0)))
-                key = (drone.id, round(np.degrees(bearing) / 20))
-                bias = self._df_bias.setdefault(key, self.rng.normal(0.0, np.radians(0.8)))
-                out.append((index, self._wrap(bearing + bias + self.rng.normal(0.0, sigma)),
-                            rx, sigma))
+            for bearing, rx, sigma in getattr(drone.sensors, "df_bearings", None) or []:
+                out.append((index, float(bearing), float(rx), float(sigma)))
         return out
 
     @staticmethod
@@ -453,7 +421,7 @@ class InterferenceResponse:
 
     def _nearest_true_jammer(self, pos):
         best = None
-        for j in self.rf.jammers.values():
+        for j in self.rf.jammers.values():  # eval-only: display of the estimate's error
             d = float(np.linalg.norm(np.asarray(j["position"][:2]) - pos[:2]))
             if best is None or d < best[0]:
                 best = (d, j["id"])
@@ -470,7 +438,9 @@ class InterferenceResponse:
         return 10 * np.log10(np.maximum(total, 1e-15))
 
     def _update_denied(self, sim_time):
-        pending = [p for p in self.world.pois if not p.surveyed]
+        # Reported, unsurveyed tasks (never ones not yet reported)
+        pending = [p for p in self.guidance.open_tasks(self._now) if not p.surveyed] \
+            if hasattr(self.guidance, "open_tasks") else []
         if not pending:
             return
         pts = np.array([p.position for p in pending], dtype=float)
@@ -499,7 +469,7 @@ class InterferenceResponse:
         """Nearby point with the best predicted link to the rest of the mesh."""
         size = self.terrain.config.size_m
         anchors = [d for d in drones.values()
-                   if d.is_alive and d.id != drone.id and d.role != DroneRole.SCOUT]
+                   if d.neighbors and d.id != drone.id and d.role != DroneRole.SCOUT]
         if not anchors:
             return None
         bearings = np.linspace(0, 2 * np.pi, 16, endpoint=False)
@@ -509,7 +479,10 @@ class InterferenceResponse:
         cand = np.clip(np.array(cand), 40.0, size - 40.0)
         pts = np.column_stack([cand, self.terrain.height_at_array(cand[:, 0], cand[:, 1]) + 60.0])
 
-        noise = self.rf.noise_floor_dbm
+        # The area-wide floor as the receivers measure it (lower quartile)
+        measured = list(self.measurements.values())
+        noise = float(np.percentile(measured, 25)) if measured else float(self.rf.base_noise_floor)
+        base_noise = noise
         if self.estimates:
             jam = self._jam_at(pts)
             noise = 10 * np.log10(10 ** (noise / 10) + 10 ** (jam / 10))
@@ -518,7 +491,7 @@ class InterferenceResponse:
                 - self._path_gain(pts, anchor_pos))            # [M, A]
         # A link is only as good as its worse end: heading for a relay that
         # is itself jammed recovers nothing.
-        anchor_noise = np.full(len(anchors), self.rf.noise_floor_dbm)
+        anchor_noise = np.full(len(anchors), base_noise)
         if self.estimates:
             anchor_noise = 10 * np.log10(10 ** (anchor_noise / 10)
                                          + 10 ** (self._jam_at(anchor_pos) / 10))

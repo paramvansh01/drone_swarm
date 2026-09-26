@@ -45,6 +45,16 @@ class SensorReadings:
     barometer_alt: float = 0.0       # m (with noise)
     rssi: Dict[str, float] = field(default_factory=dict)  # drone_id -> dBm
     wind_estimate: np.ndarray = field(default_factory=lambda: np.zeros(3))  # m/s
+    # Receiver noise floor with no packet in flight (what an RSSI register reads)
+    noise_dbm: Optional[float] = None
+    # Optical sensor: the camera has lost the ground (the aircraft is in cloud)
+    in_cloud: bool = False
+    # Direction-finding array: [(bearing_rad, rx_dbm, sigma_rad)] (sim/df_sensor.py)
+    df_bearings: list = field(default_factory=list)
+    # Two-way radio ranging to linked neighbours: drone_id -> metres (2 m error)
+    ranges: Dict[str, float] = field(default_factory=dict)
+    # Two-way ranging to the GCS antenna (a surveyed, fixed point), when linked
+    gcs_range: Optional[float] = None
 
 
 @dataclass
@@ -163,6 +173,10 @@ class Drone:
         self.packets_dropped = 0
 
         # Energy / recharge bookkeeping
+        # Measured power draw relative to the nominal model for the thrust
+        # being produced — battery current monitoring. A motor fault or a wet
+        # airframe shows up here; the energy planner uses this, not the fault.
+        self.drain_factor: float = 1.0
         self.pad_index: int = 0
         self.charge_started: Optional[float] = None
         self.sorties: int = 0
@@ -218,7 +232,10 @@ class Drone:
             return
 
         # GPS with noise
-        self.sensors.gps_position = self.position + rng.normal(0, self.config.gps_noise_std, 3)
+        # GNSS fix: the true position, minus whatever the navigation solution
+        # has drifted by (GNSS degradation), plus receiver noise
+        self.sensors.gps_position = (self.position - getattr(self, "nav_error", np.zeros(3))
+                                     + rng.normal(0, self.config.gps_noise_std, 3))
 
         # Barometer with noise
         self.sensors.barometer_alt = self.position[2] + rng.normal(0, self.config.baro_noise_std)
@@ -240,13 +257,16 @@ class Drone:
             return
 
         thrust_fraction = np.linalg.norm(self.thrust_command) / self.config.max_thrust
-        # A damaged airframe and a wet one both cost power
+        nominal = (self.config.battery_drain_rate
+                   + (self.config.battery_drain_rate_max - self.config.battery_drain_rate) * thrust_fraction)
+        # A damaged airframe and a wet one both cost power (physics)
         penalty = self.power_factor * (2.0 - self.health)
-        drain = penalty * (
-            self.config.battery_drain_rate
-            + (self.config.battery_drain_rate_max - self.config.battery_drain_rate) * thrust_fraction
-        )
+        drain = penalty * nominal
         self.battery -= drain * dt
+        # What the aircraft can observe: its current draw against the draw the
+        # nominal model predicts for this thrust (15 s moving average)
+        if nominal > 1e-6:
+            self.drain_factor += min(dt / 15.0, 1.0) * (drain / nominal - self.drain_factor)
         self.battery = max(0.0, self.battery)
 
         self.min_battery_airborne = min(self.min_battery_airborne, self.battery)
@@ -355,6 +375,8 @@ class Drone:
             "manual_target": (self.manual_target.tolist()
                               if getattr(self, "manual_target", None) is not None else None),
             "gcs_link": float(self.gcs_link),
+            "noise_dbm": self.sensors.noise_dbm,
+            "drain_factor": float(self.drain_factor),
             "radio_ok": bool(self.radio_ok),
             "connected": bool(self.connected),
             "path_quality": float(self.path_quality),

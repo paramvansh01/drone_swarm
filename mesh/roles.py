@@ -66,11 +66,19 @@ class RoleManager:
     HOP_SNR_DB = 15.0
     CHAIN_CACHE_S = 8.0
 
-    def __init__(self, world, guidance, rf, energy, log=None):
+    def __init__(self, world, guidance, rf, energy, log=None, awareness=None):
         self.world = world
         self.guidance = guidance
         self.rf = rf
         self.energy = energy
+        # What the swarm believes (mesh/awareness.py). Every count below — who
+        # is flying, who has failed, how noisy the radio is — comes from it,
+        # never from the simulator's truth. Standalone use gets its own.
+        self._owns_awareness = awareness is None
+        if awareness is None:
+            from mesh.awareness import SwarmAwareness
+            awareness = SwarmAwareness(world, rf, log)
+        self.awareness = awareness
         self.log = log or (lambda *a, **k: None)
         self.enabled = True
         # "adaptive" is the system. "static" is the conventional baseline it
@@ -100,26 +108,37 @@ class RoleManager:
     # -- link budget ----------------------------------------------------------
 
     def _noise_at(self, p) -> float:
-        if getattr(self.rf, "jammers", None):
-            return float(self.rf.noise_at(p, self.world))
-        if getattr(self.rf, "jamming_active", False):
-            return float(self.rf.jamming_power_dbm)
-        return float(self.rf.noise_floor_dbm)
+        """Expected noise at `p`: measured floor + interference sources the swarm has localised."""
+        return self.awareness.interference_at(p)
+
+    def _extra_loss_db(self) -> float:
+        """Path loss the terrain model does not explain, as measured on live links."""
+        return float(self.awareness.link_offset_db)
 
     def link_ok(self, a, b) -> bool:
         a = np.asarray(a, dtype=float)
         b = np.asarray(b, dtype=float)
         d = float(np.linalg.norm(a - b))
-        rssi = (27.0 + 3.0 + 3.0 - float(getattr(self.rf, "extra_loss_db", 0.0))
+        rssi = (27.0 + 3.0 + 3.0 - self._extra_loss_db()
                 - self.rf.friis_path_loss_db(max(d, 1.0))
                 - self.world.compute_rf_occlusion_db(a, b))
         noise = max(self._noise_at(a), self._noise_at(b))
         return rssi - noise >= self.HOP_SNR_DB
 
+    def _up(self, d, timeout=None) -> bool:
+        """Believed airborne (being heard), per the awareness layer."""
+        return self.awareness.believed_airborne(d, timeout)
+
+    def _operational(self, d) -> bool:
+        """On a pad, or airborne and heard recently enough not to be written off."""
+        return self.awareness.believed_operational(d, self.awareness.LOST_S)
+
     def _chain_to(self, target_xy) -> tuple:
         """(relay count, hop points) for a chain from the GCS to `target_xy`."""
         tx, ty = float(target_xy[0]), float(target_xy[1])
-        key = (round(tx / 100.0), round(ty / 100.0), bool(getattr(self.rf, "jammers", None)))
+        known = tuple(sorted(e.get("id", "") for e in (getattr(self.rf, "ew_emitters", None) or [])))
+        key = (round(tx / 100.0), round(ty / 100.0), known,
+               round(self._extra_loss_db()), round(self._noise_at(self.world.gcs.position)))
         cached = self._chain_cache.get(key)
         now = self._now
         if cached is not None and now - cached[0] < self.CHAIN_CACHE_S:
@@ -161,7 +180,7 @@ class RoleManager:
     def _work_points(self, drones, sim_time) -> List[np.ndarray]:
         points = []
         for d in drones.values():
-            if not d.is_alive:
+            if not self._up(d, 1.0):
                 continue
             if d.role == DroneRole.SCOUT:
                 points.append(d.position)
@@ -182,7 +201,7 @@ class RoleManager:
 
     def reachable_open_tasks(self, drones, sim_time) -> list:
         """Open tasks some aircraft in the fleet could still do (energy and clock)."""
-        fleet = [d for d in drones.values() if d.status != DroneStatus.KILLED]
+        fleet = [d for d in drones.values() if self._operational(d)]
         if not fleet:
             return []
         probe = fleet[0]
@@ -258,6 +277,7 @@ class RoleManager:
                 return False    # it would have to turn back before doing any good
         if not self.guidance.launch(drone, role, sim_time, reason):
             return False
+        self.awareness.mark_launched(drone, sim_time)
         self._last_launch = sim_time
         if role == DroneRole.RELAY and station is not None:
             self.guidance.set_relay_station(drone.id, station)
@@ -268,7 +288,10 @@ class RoleManager:
         """The farthest point of the affected area any task has been reported at."""
         w = self.world
         gcs_x = float(w.gcs.position[0])
-        pois = [p.position for p in w.pois] or [np.array([w.mission_end_x, 0.0, 0.0])]
+        # Only tasks the GCS has been told about — never ones still to come
+        t = self.guidance.mission_time(self._now)
+        known = [p.position for p in w.pois if t is not None and p.released(t)]
+        pois = known or [np.array([w.mission_end_x, 0.0, 0.0])]
         far = max(pois, key=lambda q: abs(float(q[0]) - gcs_x))
         x = float(far[0])
         y = float(w.terrain.corridor_centerline_y(x))
@@ -299,6 +322,8 @@ class RoleManager:
 
     def update(self, drones: dict, sim_time: float, mission_live: bool = True):
         self._now = sim_time
+        if self._owns_awareness:
+            self.awareness.update(drones, sim_time, max(sim_time - self.awareness.now, 0.0))
         if not self.enabled or not mission_live or self.guidance.recalled:
             return
         if sim_time - self._last_update < self.UPDATE_S:
@@ -311,12 +336,15 @@ class RoleManager:
             self._update_static(drones, sim_time)
             return
 
-        fleet = [d for d in drones.values() if d.status != DroneStatus.KILLED]
+        fleet = [d for d in drones.values() if self._operational(d)]
         cap = max(len(fleet) - self.MIN_SCOUTS, 0)
         needed = min(self.relays_needed, cap)
 
-        airborne = [d for d in drones.values() if d.is_alive
+        # Heard within the last second (a relay that has gone quiet leaves a
+        # gap the chain has to fill, whatever the reason it went quiet)
+        airborne = [d for d in drones.values() if self._up(d, 1.0)
                     and g.phases.get(d.id) not in (MissionPhase.RTH, MissionPhase.LANDING)]
+        # On the pads: the GCS can see these directly
         ready = [d for d in drones.values() if d.status == DroneStatus.READY]
         ready.sort(key=lambda d: d.id)
 
@@ -439,7 +467,7 @@ class RoleManager:
         unassigned = [p for p in self.reachable_open_tasks(drones, sim_time)
                       if p.id not in set(g.assignments.values())]
         for d in drones.values():
-            if d.is_alive and d.role == DroneRole.SCOUT and not g.assignments.get(d.id) \
+            if self._up(d, 1.0) and d.role == DroneRole.SCOUT and not g.assignments.get(d.id) \
                     and not unassigned and g.phases.get(d.id) not in (MissionPhase.RTH, MissionPhase.LANDING):
                 since = self._idle_since.setdefault(d.id, sim_time)
                 if sim_time - since >= self.IDLE_HOME_S:
@@ -485,10 +513,10 @@ class RoleManager:
             new = drones.get(h["to"])
             station = np.asarray(h["station"])
             done = False
-            if old is None or not old.is_alive or \
+            if old is None or not self._up(old, self.awareness.LOST_S) or \
                     g.phases.get(old_id) in (MissionPhase.RTH, MissionPhase.LANDING):
                 done = True             # it had to leave anyway (RTH threshold) or was lost
-            elif new is None or not new.is_alive or new.role != DroneRole.RELAY:
+            elif new is None or not self._up(new, 1.0) or new.role != DroneRole.RELAY:
                 # Replacement lost: cancel, the relay keeps its station for now
                 self.handovers.pop(old_id, None)
                 old.handover_to = None
